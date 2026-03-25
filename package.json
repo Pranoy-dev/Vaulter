@@ -1,0 +1,10 @@
+{
+  "name": "vaulter-root",
+  "private": true,
+  "scripts": {
+    "dev": "cd vaulter && pnpm dev",
+    "build": "cd vaulter && pnpm build",
+    "lint": "cd vaulter && pnpm lint",
+    "start": "cd vaulter && pnpm start"
+  }
+}
