@@ -1,0 +1,108 @@
+---
+description: Feature architecture, DRY patterns, docs, and shadcn-first frontend guidance
+alwaysApply: true
+---
+
+# Agent-Friendly Implementation Guidelines
+
+## Rule 1: Feature-Based Modules, One Index per Feature
+
+- Use feature folders, not type-based folders.
+- Keep exactly one public `index.ts` per feature to expose only what callers need.
+
+Example layout:
+
+```text
+/features/
+  billing/
+    billing.service.ts
+    billing.types.ts
+    billing.api.ts
+    billing.test.ts
+    README.md
+    index.ts
+```
+
+Example `index.ts`:
+
+```ts
+export { createSubscription, cancelSubscription } from "./billing.service"
+export type { Invoice, Plan } from "./billing.types"
+```
+
+## Rule 2: No Repetition - Extract, Don't Copy
+
+- Enforce DRY at function and config level.
+- Shared utilities belong in `/shared/utils/`.
+- Shared types belong in `/shared/types/`.
+- Constants belong in `/shared/constants.ts`.
+- If the same expression appears in 2+ places, extract it.
+
+Example:
+
+```ts
+// shared/utils/format.ts
+export function fullName(user: { firstName: string; lastName: string }) {
+  return `${user.firstName} ${user.lastName}`
+}
+```
+
+## Rule 3: Clear JSON Configs - No Logic, No Magic
+
+- Config is data only.
+- Keep environment-variant values in config files.
+- Avoid conditionals/logic in config files.
+
+Example:
+
+```json
+{
+  "api": {
+    "baseUrl": "https://api.example.com",
+    "timeoutMs": 5000,
+    "retries": 3
+  },
+  "features": {
+    "darkMode": true,
+    "betaDashboard": false
+  },
+  "roles": ["admin", "editor", "viewer"]
+}
+```
+
+Typed wrapper:
+
+```ts
+import raw from "./app.config.json"
+export const config = raw as AppConfig
+```
+
+## Rule 4: Commenting Syntax - Why, Not What
+
+- Comments explain **why**, not **what**.
+- Use these markers consistently:
+  - `WHY:` non-obvious decision rationale
+  - `TODO:` upcoming work (include owner when possible)
+  - `FIXME:` known issue/workaround
+  - `NOTE:` important context
+  - `REMOVED:` intentional deletion reason
+
+## Rule 5: Markdown Docs Every Agent Can Navigate
+
+- Keep `README.md` in every module.
+- Keep `/ARCHITECTURE.md` at project root with:
+  - overview
+  - module map
+  - data flow
+  - key decisions/ADRs
+
+Feature `README.md` should include:
+- what the module does
+- public API
+- external dependencies
+
+## Rule 6: Shadcn-First Frontend Components
+
+- For all new frontend UI work, prefer shadcn components.
+- Use shadcn MCP/CLI workflows to add components before custom building.
+- Custom elements are allowed only when no suitable shadcn component exists, and should still follow shadcn design tokens and patterns.
