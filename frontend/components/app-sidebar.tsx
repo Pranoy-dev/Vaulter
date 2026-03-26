@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useAuth } from "@clerk/nextjs"
+import { useAuth, useUser, UserButton } from "@clerk/nextjs"
 import { apiFetch } from "@/lib/api-client"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupAction,
   SidebarGroupLabel,
@@ -18,7 +19,7 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, PlusIcon } from "lucide-react"
+import { GalleryVerticalEndIcon, Loader2, PlusIcon } from "lucide-react"
 
 interface Deal {
   id: string
@@ -28,18 +29,24 @@ interface Deal {
 export function AppSidebar({
   onNewProject,
   onOpenDeal,
+  selectedDealId,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   onNewProject?: () => void
   onOpenDeal?: (id: string, name: string) => void
+  selectedDealId?: string | null
 }) {
   const { getToken, isSignedIn } = useAuth()
+  const { user } = useUser()
   const [deals, setDeals] = React.useState<Deal[]>([])
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
     if (!isSignedIn) return
+    setLoading(true)
     apiFetch<{ deals: Deal[] }>("/api/deals", getToken).then((result) => {
       if (result) setDeals(result.deals)
+      setLoading(false)
     })
   }, [isSignedIn, getToken])
 
@@ -72,7 +79,14 @@ export function AppSidebar({
             </SidebarGroupAction>
           )}
           <SidebarMenu>
-            {deals.length === 0 ? (
+            {loading ? (
+              <SidebarMenuItem>
+                <div className="flex items-center gap-2 px-2 py-1.5">
+                  <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Loading…</span>
+                </div>
+              </SidebarMenuItem>
+            ) : deals.length === 0 ? (
               <SidebarMenuItem>
                 <span className="px-2 py-1.5 text-xs text-muted-foreground">
                   No projects yet
@@ -81,7 +95,10 @@ export function AppSidebar({
             ) : (
               deals.map((deal) => (
                 <SidebarMenuItem key={deal.id}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton
+                    isActive={selectedDealId === deal.id}
+                    asChild
+                  >
                     {onOpenDeal ? (
                       <button
                         type="button"
@@ -100,6 +117,19 @@ export function AppSidebar({
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="p-3">
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-sidebar-accent transition-colors">
+          <UserButton afterSignOutUrl="/" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[13px] font-medium leading-tight">
+              {user?.fullName ?? user?.username ?? ""}
+            </span>
+            <span className="truncate text-[11px] text-muted-foreground leading-tight">
+              {user?.primaryEmailAddress?.emailAddress ?? ""}
+            </span>
+          </div>
+        </div>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
