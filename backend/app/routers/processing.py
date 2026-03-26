@@ -174,7 +174,7 @@ async def processing_status_sse(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-@router.get("/{deal_id}/process", response_model=ProcessingJobResponse)
+@router.get("/{deal_id}/process")
 async def get_processing_status(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
@@ -190,5 +190,6 @@ async def get_processing_status(
         .execute()
     )
     if not result.data:
-        raise HTTPException(status_code=404, detail="No processing job found")
+        # No job yet — return null data so the client knows quietly
+        return ApiResponse.ok(None)
     return ApiResponse.ok(result.data[0])

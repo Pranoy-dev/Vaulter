@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogClose,
@@ -17,7 +17,6 @@ import { Label } from "@/components/ui/label"
 import {
   SidebarInset,
   SidebarProvider,
-  useSidebar,
 } from "@/components/ui/sidebar"
 import { Textarea } from "@/components/ui/textarea"
 import { ProjectSetupScreen } from "@/features/project-setup"
@@ -25,8 +24,6 @@ import { useAuth } from "@clerk/nextjs"
 import { apiFetch } from "@/lib/api-client"
 import { useUserSync } from "@/hooks/use-user-sync"
 import { toast } from "sonner"
-
-type ScreenState = "welcome" | "create" | "test"
 
 function toPascalCase(str: string) {
   return str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -39,7 +36,7 @@ function NewProjectDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreate: (title: string, description: string) => void
+  onCreate: (dealId: string, title: string, description: string) => void
 }) {
   const { getToken } = useAuth()
   const [title, setTitle] = React.useState("")
@@ -57,7 +54,7 @@ function NewProjectDialog({
     if (!result) return // apiFetch already showed an error toast
     toast.success("Project created", { description: `"${result.name}" is ready.` })
     onOpenChange(false)
-    onCreate(result.name, description.trim())
+    onCreate(result.id, result.name, description.trim())
   }
 
   const handleOpenChange = (open: boolean) => {
@@ -113,72 +110,37 @@ function NewProjectDialog({
   )
 }
 
-function ProjectContentView({
-  nextScreen,
-  setNextScreen,
-  setupProjectTitle,
-}: {
-  nextScreen: ScreenState
-  setNextScreen: (s: ScreenState) => void
-  setupProjectTitle: string
-}) {
-  const { setOpen } = useSidebar()
-
-  if (nextScreen === "welcome") {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome to DataRoom AI</h1>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Your projects will appear in the sidebar. Click the&nbsp;
-          <span className="font-medium text-foreground">+</span>&nbsp;button to create your first project.
-        </p>
-      </div>
-    )
-  }
-
-  if (nextScreen === "create") {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <ProjectSetupScreen
-          projectTitle={setupProjectTitle}
-          onBack={() => {
-            setNextScreen("welcome")
-            setOpen(true)
-          }}
-        />
-      </div>
-    )
-  }
-
-  if (nextScreen === "test") {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-muted/20 p-6 md:p-8">
-        <Card className="mx-auto w-full max-w-4xl rounded-2xl border border-border/80 bg-card py-0 shadow-2xl shadow-black/20 ring-1 ring-black/10 backdrop-blur-md">
-          <CardHeader className="border-b border-border/60 px-8 py-7">
-            <CardTitle className="text-2xl font-semibold tracking-tight">Test Screen</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 px-8 py-8">
-            <p className="text-sm text-muted-foreground">
-              You are now on the next screen from the test button.
-            </p>
-            <Button variant="outline" onClick={() => setNextScreen("welcome")}>
-              Back
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  return null
-}
-
 export default function Page() {
-  const [nextScreen, setNextScreen] = React.useState<ScreenState>("welcome")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { getToken } = useAuth()
+
   const [setupProjectTitle, setSetupProjectTitle] = React.useState("Untitled project")
-  const [selectedDealId, setSelectedDealId] = React.useState<string | null>(null)
   const [sidebarRefreshKey, setSidebarRefreshKey] = React.useState(0)
   const [newProjectDialogOpen, setNewProjectDialogOpen] = React.useState(false)
+
+  // Derive current deal ID directly from URL
+  const selectedDealId = searchParams.get("deal")
+
+  // On first load: if URL has ?deal=<id>, fetch the deal name to restore the title
+  React.useEffect(() => {
+    if (!selectedDealId) return
+    apiFetch<{ id: string; name: string }>(`/api/deals/${selectedDealId}`, getToken).then(
+      (deal) => {
+        if (deal) setSetupProjectTitle(deal.name)
+      },
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDealId])
+
+  const openDeal = (id: string, name: string) => {
+    setSetupProjectTitle(name)
+    router.push(`/dashboard?deal=${id}`)
+  }
+
+  const goHome = () => {
+    router.push("/dashboard")
+  }
 
   // Sync user to backend DB on first sign-in
   useUserSync()
@@ -187,45 +149,42 @@ export default function Page() {
     <SidebarProvider className="h-full">
       <AppSidebar
         key={sidebarRefreshKey}
-        onHome={() => {
-          setNextScreen("welcome")
-          setSelectedDealId(null)
-        }}
+        onHome={goHome}
         onNewProject={() => setNewProjectDialogOpen(true)}
         selectedDealId={selectedDealId}
-        onOpenDeal={(id, name) => {
-          setSelectedDealId(id)
-          setSetupProjectTitle(name)
-          setNextScreen("create")
-        }}
+        onOpenDeal={openDeal}
         onDealDeleted={(id) => {
-          if (selectedDealId === id) {
-            setNextScreen("welcome")
-            setSelectedDealId(null)
-          }
+          if (selectedDealId === id) goHome()
         }}
       />
       <SidebarInset className="min-h-0">
-        <ProjectContentView
-          nextScreen={nextScreen}
-          setNextScreen={(s) => {
-            setNextScreen(s)
-            // Refresh sidebar deal list when returning to welcome screen
-            if (s === "welcome") {
-              setSidebarRefreshKey((k) => k + 1)
-              setSelectedDealId(null)
-            }
-          }}
-          setupProjectTitle={setupProjectTitle}
-        />
+        {selectedDealId ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <ProjectSetupScreen
+              dealId={selectedDealId}
+              projectTitle={setupProjectTitle}
+              onBack={() => {
+                goHome()
+                setSidebarRefreshKey((k) => k + 1)
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <h1 className="text-2xl font-semibold tracking-tight">Welcome to DataRoom AI</h1>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Your projects will appear in the sidebar. Click the&nbsp;
+              <span className="font-medium text-foreground">+</span>&nbsp;button to create your first project.
+            </p>
+          </div>
+        )}
       </SidebarInset>
       <NewProjectDialog
         open={newProjectDialogOpen}
         onOpenChange={setNewProjectDialogOpen}
-        onCreate={(title) => {
-          setSetupProjectTitle(title)
-          setNextScreen("create")
+        onCreate={(dealId, title) => {
           setSidebarRefreshKey((k) => k + 1)
+          openDeal(dealId, title)
         }}
       />
     </SidebarProvider>

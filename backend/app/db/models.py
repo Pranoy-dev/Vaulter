@@ -92,6 +92,9 @@ class Document(Base):
         server_default="other",
     )
     classification_confidence = Column(Float, default=0)
+    rag_indexed = Column(Boolean, nullable=False, default=False)
+    rag_indexed_at = Column(DateTime(timezone=True), nullable=True)
+    classified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     deal = relationship("Deal", back_populates="documents")

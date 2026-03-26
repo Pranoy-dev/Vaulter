@@ -1,7 +1,7 @@
 import { toast } from "sonner"
 import type { useAuth } from "@clerk/nextjs"
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
 
 type GetToken = ReturnType<typeof useAuth>["getToken"]
 

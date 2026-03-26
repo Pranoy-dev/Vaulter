@@ -181,6 +181,32 @@ class ProcessingJobResponse(BaseModel):
 
 # ── Upload ───────────────────────────────────────────────────────────────────
 
+class UploadInitResponse(BaseModel):
+    session_id: str
+    deal_id: uuid.UUID
+    chunk_size: int
+
+
+class ChunkUploadResponse(BaseModel):
+    relative_path: str
+    chunk_index: int
+    chunks_received: int
+    total_chunks: int
+
+
+class FileProgress(BaseModel):
+    relative_path: str
+    file_size: int
+    total_chunks: int
+    uploaded_chunks: list[int]
+
+
+class UploadProgressResponse(BaseModel):
+    deal_id: uuid.UUID
+    session_id: str
+    files: list[FileProgress]
+
+
 class UploadCompleteResponse(BaseModel):
     deal_id: uuid.UUID
     files_uploaded: int

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     fuzzy_match_threshold: float = 0.92
     classification_confidence_threshold: float = 0.70
 
+    # Chunked upload
+    upload_temp_dir: str = ""  # defaults to system temp
+    upload_chunk_size: int = 5 * 1024 * 1024  # 5 MB
+
     model_config = {"env_file": str(_ENV_FILE), "env_file_encoding": "utf-8"}
 
     @property
