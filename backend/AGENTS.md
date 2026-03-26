@@ -44,3 +44,17 @@ return ApiResponse.fail("NOT_FOUND", "Deal not found")
 
 - Use `Depends(get_current_user_id)` (or the alias `CurrentUserId`) from `app.auth` for protected endpoints.
 - The dependency verifies the Clerk JWT and ensures the user row exists in the DB.
+
+## Running the Backend
+
+Always start with `--reload-dir` scoped to `app/` only — without it, uvicorn watches the entire workspace root and triggers spurious reloads on any file change.
+
+```powershell
+# Clean restart (kills all python processes first to avoid stale reloader parents)
+Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+Set-Location d:\Project\Vaulter\backend
+python -m uvicorn app.main:app --reload --reload-dir d:\Project\Vaulter\backend\app --port 8000
+```
+
+**Why kill all python processes?** `uvicorn --reload` spawns a reloader parent + a worker child. `Get-NetTCPConnection` only sees the worker (socket owner). Killing just the worker causes the reloader to immediately spawn a new one. You must kill the full process tree — easiest with `Get-Process python | Stop-Process -Force`.
