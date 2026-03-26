@@ -37,7 +37,8 @@ return ApiResponse.fail("NOT_FOUND", "Deal not found")
 ## Database Access
 
 - Use `get_supabase()` from `app.db.client` for Supabase client queries.
-- When querying for a single row, use `.execute()` and check `result.data` (a list). Do **not** use `.maybe_single()` — it returns `None` instead of an object when no row is found.
+- When querying for a single row, use `.execute()` and check `result.data` (a list). Do **not** use `.maybe_single()` or `.single()` — both throw or return `None` instead of a safe empty result.
+- Access the first row as `result.data[0]`, after checking `if result.data:`.
 
 ## Auth
 

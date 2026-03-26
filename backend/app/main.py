@@ -14,8 +14,21 @@ from app.routers import deals, processing, upload, webhooks
 from app.auth import get_current_user_id
 
 import logging
+import sys
 
+# Root logger at WARNING so third-party libs (hpack, httpcore, httpx, etc.) stay quiet.
+# Our own "dataroom" logger is set to DEBUG so nothing from our code is swallowed.
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
 logger = logging.getLogger("dataroom")
+logger.setLevel(logging.DEBUG)
+# Ensure uvicorn's access/error logs are still visible
+logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
 
 def _check_db() -> bool:
@@ -75,6 +88,8 @@ _STATUS_CODES = {
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     code = _STATUS_CODES.get(exc.status_code, "ERROR")
+    if exc.status_code >= 500:
+        logger.error("HTTP %s on %s %s: %s", exc.status_code, request.method, request.url.path, exc.detail)
     return JSONResponse(
         status_code=exc.status_code,
         content=ApiResponse.fail(code, str(exc.detail)).model_dump(),
@@ -94,9 +109,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "UNHANDLED %s on %s %s — %s: %s",
+        type(exc).__name__,
+        request.method,
+        request.url.path,
+        type(exc).__name__,
+        exc,
+        exc_info=exc,
+    )
     return JSONResponse(
         status_code=500,
-        content=ApiResponse.fail("INTERNAL_ERROR", "An unexpected error occurred.").model_dump(),
+        content=ApiResponse.fail("INTERNAL_ERROR", f"{type(exc).__name__}: {exc}").model_dump(),
     )
 
 

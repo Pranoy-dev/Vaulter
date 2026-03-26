@@ -82,7 +82,7 @@ export async function apiFetch<T = unknown>(
     return body.data
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error"
-    console.error("[apiFetch] Network error:", message)
+    console.warn("[apiFetch] Network error:", message)
     toast.error("Connection error", {
       description: `Unable to reach the server: ${message}`,
     })

@@ -104,12 +104,11 @@ async def trigger_processing(
         sb.table("processing_jobs")
         .select("*")
         .eq("deal_id", deal_id_str)
-        .single()
         .execute()
     )
     if not job.data:
         raise HTTPException(status_code=400, detail="No processing job found — upload files first")
-    if job.data["status"] == "running":
+    if job.data[0]["status"] == "running":
         raise HTTPException(status_code=409, detail="Processing already in progress")
 
     # Reset job if re-running
@@ -131,10 +130,9 @@ async def trigger_processing(
         sb.table("processing_jobs")
         .select("*")
         .eq("deal_id", deal_id_str)
-        .single()
         .execute()
     )
-    return ApiResponse.ok(result.data)
+    return ApiResponse.ok(result.data[0])
 
 
 @router.get("/{deal_id}/process/status")
@@ -154,7 +152,6 @@ async def processing_status_sse(
                 sb.table("processing_jobs")
                 .select("*")
                 .eq("deal_id", deal_id_str)
-                .single()
                 .execute()
             )
             if not job.data:
@@ -162,14 +159,14 @@ async def processing_status_sse(
                 return
 
             data = {
-                "status": job.data["status"],
-                "current_stage": job.data.get("current_stage"),
-                "progress": job.data.get("progress", 0),
-                "error_message": job.data.get("error_message"),
+                "status": job.data[0]["status"],
+                "current_stage": job.data[0].get("current_stage"),
+                "progress": job.data[0].get("progress", 0),
+                "error_message": job.data[0].get("error_message"),
             }
             yield f"data: {json.dumps(data)}\n\n"
 
-            if job.data["status"] in ("completed", "failed"):
+            if job.data[0]["status"] in ("completed", "failed"):
                 return
 
             await asyncio.sleep(1)
@@ -190,9 +187,8 @@ async def get_processing_status(
         sb.table("processing_jobs")
         .select("*")
         .eq("deal_id", str(deal_id))
-        .single()
         .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="No processing job found")
-    return ApiResponse.ok(result.data)
+    return ApiResponse.ok(result.data[0])

@@ -12,11 +12,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ProjectSetupScreen } from "@/features/project-setup"
-import { DEMO_WORKSPACE_TITLE } from "@/features/project-setup/demo-workspace/mock-data"
 import { CheckCircle2, FolderUp } from "lucide-react"
 import { useUserSync } from "@/hooks/use-user-sync"
 
-type ScreenState = "none" | "create" | "test"
+type ScreenState = "welcome" | "new" | "create" | "test"
 
 function ProjectCreationView({
   nextScreen,
@@ -66,12 +65,6 @@ function ProjectCreationView({
   }
 
   const onCreateProject = () => {
-    // Placeholder action until API wiring is added.
-    console.log("Create Project clicked", {
-      title: title.trim(),
-      folder: selectedFolderName,
-      files: selectedCount,
-    })
     setSetupProjectTitle(title.trim() || "Untitled project")
     setOpen(false)
     setNextScreen("create")
@@ -84,13 +77,25 @@ function ProjectCreationView({
     setNextScreen("test")
   }
 
+  if (nextScreen === "welcome") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome to DataRoom AI</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Your projects will appear in the sidebar. Click the&nbsp;
+          <span className="font-medium text-foreground">+</span>&nbsp;button to create your first project.
+        </p>
+      </div>
+    )
+  }
+
   if (nextScreen === "create") {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <ProjectSetupScreen
           projectTitle={setupProjectTitle}
           onBack={() => {
-            setNextScreen("none")
+            setNextScreen("welcome")
             setOpen(true)
           }}
         />
@@ -109,7 +114,7 @@ function ProjectCreationView({
             <p className="text-sm text-muted-foreground">
               You are now on the next screen from the test button.
             </p>
-            <Button variant="outline" onClick={() => setNextScreen("none")}>
+            <Button variant="outline" onClick={() => setNextScreen("welcome")}>
               Back
             </Button>
           </CardContent>
@@ -216,24 +221,30 @@ function ProjectCreationView({
 }
 
 export default function Page() {
-  const [nextScreen, setNextScreen] = React.useState<ScreenState>("none")
+  const [nextScreen, setNextScreen] = React.useState<ScreenState>("welcome")
   const [setupProjectTitle, setSetupProjectTitle] = React.useState("Untitled project")
+  const [sidebarRefreshKey, setSidebarRefreshKey] = React.useState(0)
 
   // Sync user to backend DB on first sign-in
   useUserSync()
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-full">
       <AppSidebar
-        onOpenDemoWorkspace={() => {
-          setSetupProjectTitle(DEMO_WORKSPACE_TITLE)
-          setNextScreen("create")
+        key={sidebarRefreshKey}
+        onNewProject={() => {
+          setSetupProjectTitle("")
+          setNextScreen("new")
         }}
       />
       <SidebarInset className="min-h-0">
         <ProjectCreationView
           nextScreen={nextScreen}
-          setNextScreen={setNextScreen}
+          setNextScreen={(s) => {
+            setNextScreen(s)
+            // Refresh sidebar deal list when returning to welcome screen
+            if (s === "welcome") setSidebarRefreshKey((k) => k + 1)
+          }}
           setupProjectTitle={setupProjectTitle}
           setSetupProjectTitle={setSetupProjectTitle}
         />

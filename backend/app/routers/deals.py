@@ -11,15 +11,9 @@ from app.db.client import get_supabase
 from app.models.schemas import (
     ApiResponse,
     DealCreate,
-    DealListResponse,
-    DealResponse,
-    DocumentListResponse,
-    DocumentResponse,
-    DuplicateGroupListResponse,
     DuplicateGroupMemberResponse,
     DuplicateGroupResponse,
     LeaseChainDocumentResponse,
-    LeaseChainListResponse,
     LeaseChainResponse,
 )
 
@@ -27,30 +21,33 @@ router = APIRouter()
 
 
 def _resolve_user_id(clerk_user_id: str) -> uuid.UUID:
-    """Lookup internal user UUID from Clerk user ID, creating if needed."""
+    """Lookup internal user UUID from Clerk user ID."""
     sb = get_supabase()
     result = sb.table("users").select("id").eq("clerk_user_id", clerk_user_id).execute()
     if result.data:
         return uuid.UUID(result.data[0]["id"])
-    # Auto-create user row on first deal action
-    insert = sb.table("users").insert({"clerk_user_id": clerk_user_id, "email": ""}).execute()
-    return uuid.UUID(insert.data[0]["id"])
+    # Fallback: upsert so we never violate the unique constraint
+    upsert = sb.table("users").upsert(
+        {"clerk_user_id": clerk_user_id, "email": ""},
+        on_conflict="clerk_user_id",
+    ).execute()
+    return uuid.UUID(upsert.data[0]["id"])
 
 
 def _verify_deal_ownership(deal_id: uuid.UUID, user_id: uuid.UUID) -> dict:
     """Fetch deal and verify the user owns it."""
     sb = get_supabase()
-    result = sb.table("deals").select("*").eq("id", str(deal_id)).single().execute()
+    result = sb.table("deals").select("*").eq("id", str(deal_id)).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Deal not found")
-    if result.data["user_id"] != str(user_id):
+    if result.data[0]["user_id"] != str(user_id):
         raise HTTPException(status_code=403, detail="Access denied")
-    return result.data
+    return result.data[0]
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=DealResponse, status_code=201)
+@router.post("", status_code=201)
 async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current_user_id)):
     user_id = _resolve_user_id(clerk_user_id)
     sb = get_supabase()
@@ -61,7 +58,7 @@ async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current
     return ApiResponse.ok(result.data[0])
 
 
-@router.get("", response_model=DealListResponse)
+@router.get("")
 async def list_deals(clerk_user_id: str = Depends(get_current_user_id)):
     user_id = _resolve_user_id(clerk_user_id)
     sb = get_supabase()
@@ -84,7 +81,7 @@ async def get_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_current_
 
 # ── Documents (Phase 5) ─────────────────────────────────────────────────────
 
-@router.get("/{deal_id}/documents", response_model=DocumentListResponse)
+@router.get("/{deal_id}/documents")
 async def list_documents(
     deal_id: uuid.UUID,
     category: str | None = None,
@@ -112,16 +109,16 @@ async def download_document(
     user_id = _resolve_user_id(clerk_user_id)
     _verify_deal_ownership(deal_id, user_id)
     sb = get_supabase()
-    doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).single().execute()
-    if not doc.data or not doc.data.get("storage_path"):
+    doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).execute()
+    if not doc.data or not doc.data[0].get("storage_path"):
         raise HTTPException(status_code=404, detail="Document not found")
-    signed = sb.storage.from_("dataroom-files").create_signed_url(doc.data["storage_path"], 3600)
+    signed = sb.storage.from_("dataroom-files").create_signed_url(doc.data[0]["storage_path"], 3600)
     return ApiResponse.ok({"url": signed.get("signedURL") or signed.get("signedUrl")})
 
 
 # ── Duplicates (Phase 5) ────────────────────────────────────────────────────
 
-@router.get("/{deal_id}/duplicates", response_model=DuplicateGroupListResponse)
+@router.get("/{deal_id}/duplicates")
 async def list_duplicates(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
@@ -166,7 +163,7 @@ async def list_duplicates(
 
 # ── Lease Chains (Phase 5) ──────────────────────────────────────────────────
 
-@router.get("/{deal_id}/lease-chains", response_model=LeaseChainListResponse)
+@router.get("/{deal_id}/lease-chains")
 async def list_lease_chains(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),

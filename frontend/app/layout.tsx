@@ -29,8 +29,8 @@ export default function RootLayout({
         lang="en"
         className={cn("h-full", "antialiased", geistMono.variable, "font-sans", geist.variable)}
       >
-        <body className="min-h-full flex flex-col">
-          <header className="flex justify-end items-center p-4 gap-4 h-16">
+        <body className="h-full overflow-hidden flex flex-col">
+          <header className="flex justify-end items-center p-4 gap-4 h-16 shrink-0">
             <Show when="signed-out">
               <SignInButton />
               <SignUpButton>
@@ -43,7 +43,9 @@ export default function RootLayout({
               <UserButton />
             </Show>
           </header>
-          <TooltipProvider>{children}</TooltipProvider>
+          <div className="flex-1 min-h-0 overflow-auto">
+            <TooltipProvider>{children}</TooltipProvider>
+          </div>
           <Toaster position="bottom-right" richColors closeButton />
         </body>
       </html>
