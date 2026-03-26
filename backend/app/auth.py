@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import contextvars
+
 import httpx
 from fastapi import Depends, HTTPException, Request
 from jose import JWTError, jwt
 
 from app.config import settings
 from app.db.client import get_supabase
+
+# Set to True during the request when _ensure_user_exists creates a new row.
+user_just_created: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "user_just_created", default=False,
+)
 
 _jwks_cache: dict | None = None
 
@@ -75,14 +82,18 @@ async def get_current_user_id(request: Request) -> str:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
 
 
-async def _ensure_user_exists(clerk_user_id: str) -> None:
-    """Upsert user into DB on first login using Clerk's backend API."""
+async def _ensure_user_exists(clerk_user_id: str) -> bool:
+    """Upsert user into DB on first login using Clerk's backend API.
+
+    Returns True if a new user row was created, False if it already existed.
+    """
     sb = get_supabase()
 
     # Check if user already exists — skip API call if so
-    existing = sb.table("users").select("id").eq("clerk_user_id", clerk_user_id).maybe_single().execute()
+    existing = sb.table("users").select("id").eq("clerk_user_id", clerk_user_id).execute()
     if existing.data:
-        return
+        user_just_created.set(False)
+        return False
 
     # Fetch full user info from Clerk API
     async with httpx.AsyncClient() as client:
@@ -98,7 +109,8 @@ async def _ensure_user_exists(clerk_user_id: str) -> None:
             {"clerk_user_id": clerk_user_id, "email": ""},
             on_conflict="clerk_user_id",
         ).execute()
-        return
+        user_just_created.set(True)
+        return True
 
     data = resp.json()
     email_addresses = data.get("email_addresses", [])
@@ -109,6 +121,8 @@ async def _ensure_user_exists(clerk_user_id: str) -> None:
         {"clerk_user_id": clerk_user_id, "email": email, "name": name or None},
         on_conflict="clerk_user_id",
     ).execute()
+    user_just_created.set(True)
+    return True
 
 
 CurrentUserId = Depends(get_current_user_id)

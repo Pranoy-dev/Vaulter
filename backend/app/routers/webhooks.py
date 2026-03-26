@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request, HTTPException
 
 from app.db.client import get_supabase
+from app.models.schemas import ApiResponse
 
 router = APIRouter()
 
@@ -59,4 +60,4 @@ async def clerk_webhook(request: Request):
         if clerk_id:
             sb.table("users").delete().eq("clerk_user_id", clerk_id).execute()
 
-    return {"status": "ok"}
+    return ApiResponse.ok({"status": "ok"})

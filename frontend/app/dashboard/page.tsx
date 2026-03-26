@@ -14,6 +14,7 @@ import {
 import { ProjectSetupScreen } from "@/features/project-setup"
 import { DEMO_WORKSPACE_TITLE } from "@/features/project-setup/demo-workspace/mock-data"
 import { CheckCircle2, FolderUp } from "lucide-react"
+import { useUserSync } from "@/hooks/use-user-sync"
 
 type ScreenState = "none" | "create" | "test"
 
@@ -217,6 +218,9 @@ function ProjectCreationView({
 export default function Page() {
   const [nextScreen, setNextScreen] = React.useState<ScreenState>("none")
   const [setupProjectTitle, setSetupProjectTitle] = React.useState("Untitled project")
+
+  // Sync user to backend DB on first sign-in
+  useUserSync()
 
   return (
     <SidebarProvider>

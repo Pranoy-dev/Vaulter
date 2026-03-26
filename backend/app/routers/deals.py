@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_current_user_id
 from app.db.client import get_supabase
 from app.models.schemas import (
+    ApiResponse,
     DealCreate,
     DealListResponse,
     DealResponse,
@@ -57,7 +58,7 @@ async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current
         "user_id": str(user_id),
         "name": body.name,
     }).execute()
-    return result.data[0]
+    return ApiResponse.ok(result.data[0])
 
 
 @router.get("", response_model=DealListResponse)
@@ -71,14 +72,14 @@ async def list_deals(clerk_user_id: str = Depends(get_current_user_id)):
         .order("created_at", desc=True)
         .execute()
     )
-    return {"deals": result.data}
+    return ApiResponse.ok({"deals": result.data})
 
 
-@router.get("/{deal_id}", response_model=DealResponse)
+@router.get("/{deal_id}")
 async def get_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_current_user_id)):
     user_id = _resolve_user_id(clerk_user_id)
     deal = _verify_deal_ownership(deal_id, user_id)
-    return deal
+    return ApiResponse.ok(deal)
 
 
 # ── Documents (Phase 5) ─────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ async def list_documents(
     if search:
         query = query.ilike("filename", f"%{search}%")
     result = query.order("original_path").execute()
-    return {"documents": result.data, "total": result.count or len(result.data)}
+    return ApiResponse.ok({"documents": result.data, "total": result.count or len(result.data)})
 
 
 @router.get("/{deal_id}/documents/{doc_id}/download")
@@ -115,7 +116,7 @@ async def download_document(
     if not doc.data or not doc.data.get("storage_path"):
         raise HTTPException(status_code=404, detail="Document not found")
     signed = sb.storage.from_("dataroom-files").create_signed_url(doc.data["storage_path"], 3600)
-    return {"url": signed.get("signedURL") or signed.get("signedUrl")}
+    return ApiResponse.ok({"url": signed.get("signedURL") or signed.get("signedUrl")})
 
 
 # ── Duplicates (Phase 5) ────────────────────────────────────────────────────
@@ -160,7 +161,7 @@ async def list_duplicates(
         ))
     # Sort by group size descending
     result.sort(key=lambda g: len(g.members), reverse=True)
-    return {"groups": result}
+    return ApiResponse.ok({"groups": result})
 
 
 # ── Lease Chains (Phase 5) ──────────────────────────────────────────────────
@@ -206,4 +207,4 @@ async def list_lease_chains(
             tenant_identifier=c.get("tenant_identifier"),
             documents=doc_list,
         ))
-    return {"chains": result}
+    return ApiResponse.ok({"chains": result})

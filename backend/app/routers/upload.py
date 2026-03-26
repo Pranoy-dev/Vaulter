@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 
 from app.auth import get_current_user_id
 from app.db.client import get_supabase
-from app.models.schemas import UploadCompleteResponse
+from app.models.schemas import ApiResponse, UploadCompleteResponse
 from app.services.storage import upload_file
 
 router = APIRouter()
@@ -94,8 +94,8 @@ async def upload_files(
         "status": "pending",
     }).execute()
 
-    return UploadCompleteResponse(
+    return ApiResponse.ok(UploadCompleteResponse(
         deal_id=deal_id,
         files_uploaded=uploaded_count,
         total_size=total_size,
-    )
+    ).model_dump())

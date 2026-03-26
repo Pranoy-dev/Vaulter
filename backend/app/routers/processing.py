@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from app.auth import get_current_user_id
 from app.db.client import get_supabase
-from app.models.schemas import ProcessingJobResponse
+from app.models.schemas import ApiResponse, ProcessingJobResponse
 from app.routers.deals import _resolve_user_id, _verify_deal_ownership
 
 router = APIRouter()
@@ -134,7 +134,7 @@ async def trigger_processing(
         .single()
         .execute()
     )
-    return result.data
+    return ApiResponse.ok(result.data)
 
 
 @router.get("/{deal_id}/process/status")
@@ -195,4 +195,4 @@ async def get_processing_status(
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="No processing job found")
-    return result.data
+    return ApiResponse.ok(result.data)
