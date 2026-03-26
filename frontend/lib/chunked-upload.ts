@@ -253,6 +253,7 @@ export async function uploadFiles(
 
   const completeForm = new FormData()
   completeForm.append("session_id", session_id)
+  completeForm.append("skipped_files", JSON.stringify(skippedFiles))
 
   const completeRes = await authedFetch(`/api/deals/${dealId}/upload/complete`, getToken, {
     method: "POST",

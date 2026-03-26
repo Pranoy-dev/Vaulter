@@ -181,6 +181,7 @@ async def upload_progress(
 async def upload_complete(
     deal_id: uuid.UUID,
     session_id: str = Form(...),
+    skipped_files: str = Form(default="[]"),
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Assemble every file from its chunks, upload to Supabase Storage, and insert document rows."""
@@ -241,11 +242,21 @@ async def upload_complete(
         }).execute()
         uploaded_count += 1
 
+    # Parse skipped files JSON (sent by client)
+    try:
+        import json
+        skipped_list = json.loads(skipped_files) if skipped_files else []
+        if not isinstance(skipped_list, list):
+            skipped_list = []
+    except Exception:
+        skipped_list = []
+
     # Update deal counters
     sb.table("deals").update({
         "status": "uploaded",
         "file_count": uploaded_count,
         "total_size": total_size,
+        "skipped_files": skipped_list,
     }).eq("id", str(deal_id)).execute()
 
     # Upsert processing job — handles re-uploads to the same deal

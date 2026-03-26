@@ -19,7 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -58,6 +58,7 @@ class Deal(Base):
     )
     file_count = Column(Integer, default=0)
     total_size = Column(BigInteger, default=0)
+    skipped_files = Column(JSONB, nullable=True, default=list)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

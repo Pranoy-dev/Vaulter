@@ -59,6 +59,7 @@ export interface DealData {
   documents: DealDocument[]
   duplicates: DuplicateGroup[]
   leaseChains: LeaseChain[]
+  skippedFiles: string[]
   loading: boolean
   /** refetch all data */
   refresh: () => void
@@ -83,6 +84,7 @@ export function useDealData(dealId: string | null): DealData {
   const [documents, setDocuments] = React.useState<DealDocument[]>([])
   const [duplicates, setDuplicates] = React.useState<DuplicateGroup[]>([])
   const [leaseChains, setLeaseChains] = React.useState<LeaseChain[]>([])
+  const [skippedFiles, setSkippedFiles] = React.useState<string[]>([])
   const [loading, setLoading] = React.useState(false)
   const [tick, setTick] = React.useState(0)
 
@@ -103,11 +105,16 @@ export function useDealData(dealId: string | null): DealData {
         `/api/deals/${dealId}/lease-chains`,
         getToken,
       ),
-    ]).then(([docsRes, dupsRes, chainsRes]) => {
+      authedGet<{ id: string; skipped_files: string[] | null }>(
+        `/api/deals/${dealId}`,
+        getToken,
+      ),
+    ]).then(([docsRes, dupsRes, chainsRes, dealRes]) => {
       if (cancelled) return
       setDocuments(docsRes?.documents ?? [])
       setDuplicates(dupsRes?.groups ?? [])
       setLeaseChains(chainsRes?.chains ?? [])
+      setSkippedFiles(dealRes?.skipped_files ?? [])
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -115,5 +122,5 @@ export function useDealData(dealId: string | null): DealData {
 
   const refresh = React.useCallback(() => setTick((t) => t + 1), [])
 
-  return { documents, duplicates, leaseChains, loading, refresh }
+  return { documents, duplicates, leaseChains, skippedFiles, loading, refresh }
 }

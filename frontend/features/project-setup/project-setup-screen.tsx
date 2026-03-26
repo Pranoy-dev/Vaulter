@@ -514,6 +514,28 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                 {/* Existing files summary + list — shown when project already has files and dropzone is hidden */}
                 {!showDropzone && dealData.documents.length > 0 && !isUploading && (
                   <div className="space-y-3">
+                    {/* ── Skipped files card ── */}
+                    {dealData.skippedFiles.length > 0 && (
+                      <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/60 dark:border-zinc-800/60 dark:bg-zinc-900/30 overflow-hidden">
+                        <div className="flex items-center gap-2 border-b border-zinc-200/60 dark:border-zinc-800/40 px-4 py-2.5">
+                          <AlertTriangle className="size-3.5 shrink-0 text-zinc-400" />
+                          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                            {dealData.skippedFiles.length} skipped file{dealData.skippedFiles.length !== 1 ? "s" : ""} — unsupported format
+                          </span>
+                        </div>
+                        <div className="divide-y divide-zinc-200/40 dark:divide-zinc-800/30">
+                          {dealData.skippedFiles.map((path) => (
+                            <div key={path} className="flex items-center gap-2 px-4 py-1.5 text-xs">
+                              <X className="size-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" />
+                              <span className="min-w-0 flex-1 truncate text-zinc-400 line-through decoration-zinc-300/60" title={path}>
+                                {path}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* ── Pending processing cards ── */}
                     {(() => {
                       const pending = dealData.documents.filter(
