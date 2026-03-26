@@ -1,10 +1,10 @@
 {
-  "name": "vaulter-root",
+  "name": "dataroom-ai-root",
   "private": true,
   "scripts": {
-    "dev": "cd vaulter && pnpm dev",
-    "build": "cd vaulter && pnpm build",
-    "lint": "cd vaulter && pnpm lint",
-    "start": "cd vaulter && pnpm start"
+    "dev": "cd frontend && pnpm dev",
+    "build": "cd frontend && pnpm build",
+    "lint": "cd frontend && pnpm lint",
+    "start": "cd frontend && pnpm start"
   }
 }

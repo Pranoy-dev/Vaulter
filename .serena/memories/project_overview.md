@@ -43,3 +43,14 @@ d:\Project\Vaulter\
 - Clerk handles all auth; user data stored on Clerk servers
 - `proxy.ts` protects all routes except `/sign-in` and `/sign-up`
 - Use `auth()` / `currentUser()` from `@clerk/nextjs/server` in server components
+
+## Backend (FastAPI — Python)
+- Lives at `d:\Project\Vaulter\backend\`
+- FastAPI app: `app/main.py` → runs on http://localhost:8000
+- Routers: deals, upload, processing, webhooks
+- Services: text_extractor, duplicate_detection, document_classifier, lease_linker, storage
+- Auth: Clerk JWT verification via `app/auth.py`
+- DB: Supabase Postgres via `app/db/client.py` (service role key)
+- Storage: Supabase Storage bucket `dataroom-files`
+- Schema: `backend/db/schema.sql`
+- Start: `cd backend && uvicorn app.main:app --port 8000 --reload`

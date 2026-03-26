@@ -1,0 +1,43 @@
+[project]
+name = "dataroom-ai-backend"
+version = "0.1.0"
+description = "DataRoom AI — FastAPI backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "supabase>=2.9",
+    "python-jose[cryptography]>=3.3",
+    "httpx>=0.27",
+    "pypdf>=4.0",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+    "scikit-learn>=1.5",
+    "numpy>=1.26",
+    "python-Levenshtein>=0.25",
+    "pydantic-settings>=2.4",
+    "openai>=1.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
