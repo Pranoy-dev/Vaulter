@@ -19,27 +19,92 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, Loader2, PlusIcon } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { GalleryVerticalEndIcon, HomeIcon, Loader2, PlusIcon, Trash2Icon } from "lucide-react"
+import { toast } from "sonner"
 
 interface Deal {
   id: string
   name: string
 }
 
+function DeleteProjectDialog({
+  deal,
+  onClose,
+  onDeleted,
+}: {
+  deal: Deal | null
+  onClose: () => void
+  onDeleted: (id: string) => void
+}) {
+  const { getToken } = useAuth()
+  const [loading, setLoading] = React.useState(false)
+
+  const handleDelete = async () => {
+    if (!deal) return
+    setLoading(true)
+    const result = await apiFetch(`/api/deals/${deal.id}`, getToken, { method: "DELETE" })
+    setLoading(false)
+    if (result === null) return // apiFetch showed error toast
+    toast.success("Project deleted", { description: `"${deal.name}" has been removed.` })
+    onDeleted(deal.id)
+    onClose()
+  }
+
+  return (
+    <Dialog open={!!deal} onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete Project</DialogTitle>
+          <DialogDescription>
+            This will permanently delete <span className="font-medium text-foreground">"{deal?.name}"</span> and all its uploaded files. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-2">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={loading}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {loading ? <><Loader2 className="size-3.5 animate-spin" /> Deleting…</> : "Delete Project"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function AppSidebar({
   onNewProject,
   onOpenDeal,
   selectedDealId,
+  onDealDeleted,
+  onHome,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   onNewProject?: () => void
   onOpenDeal?: (id: string, name: string) => void
   selectedDealId?: string | null
+  onDealDeleted?: (id: string) => void
+  onHome?: () => void
 }) {
   const { getToken, isSignedIn } = useAuth()
   const { user } = useUser()
   const [deals, setDeals] = React.useState<Deal[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [pendingDelete, setPendingDelete] = React.useState<Deal | null>(null)
 
   React.useEffect(() => {
     if (!isSignedIn) return
@@ -50,7 +115,13 @@ export function AppSidebar({
     })
   }, [isSignedIn, getToken])
 
+  const handleDeleted = (id: string) => {
+    setDeals((prev) => prev.filter((d) => d.id !== id))
+    onDealDeleted?.(id)
+  }
+
   return (
+    <>
     <Sidebar {...props}>
       <SidebarHeader>
         <SidebarMenu>
@@ -71,7 +142,17 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>My Projects</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={onHome}>
+                <HomeIcon className="size-4 shrink-0" />
+                Home
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sm font-semibold text-sidebar-foreground">My Projects</SidebarGroupLabel>
           {onNewProject && (
             <SidebarGroupAction title="New project" onClick={onNewProject}>
               <PlusIcon className="size-4" />
@@ -94,7 +175,7 @@ export function AppSidebar({
               </SidebarMenuItem>
             ) : (
               deals.map((deal) => (
-                <SidebarMenuItem key={deal.id}>
+                <SidebarMenuItem key={deal.id} className="group/deal-item">
                   <SidebarMenuButton
                     isActive={selectedDealId === deal.id}
                     asChild
@@ -111,6 +192,14 @@ export function AppSidebar({
                       <a href={`#deal-${deal.id}`}>{deal.name}</a>
                     )}
                   </SidebarMenuButton>
+                  <button
+                    type="button"
+                    title="Delete project"
+                    onClick={(e) => { e.stopPropagation(); setPendingDelete(deal) }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/deal-item:opacity-100 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
+                  >
+                    <Trash2Icon className="size-3.5" />
+                  </button>
                 </SidebarMenuItem>
               ))
             )}
@@ -132,6 +221,12 @@ export function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+    <DeleteProjectDialog
+      deal={pendingDelete}
+      onClose={() => setPendingDelete(null)}
+      onDeleted={handleDeleted}
+    />
+    </>
   )
 }
 

@@ -205,3 +205,27 @@ async def list_lease_chains(
             documents=doc_list,
         ))
     return ApiResponse.ok({"chains": result})
+
+
+# ── Delete Deal ─────────────────────────────────────────────────────────────
+
+@router.delete("/{deal_id}", status_code=200)
+async def delete_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_current_user_id)):
+    user_id = _resolve_user_id(clerk_user_id)
+    _verify_deal_ownership(deal_id, user_id)
+    sb = get_supabase()
+
+    # Delete all storage files under this deal's prefix
+    try:
+        listed = sb.storage.from_("dataroom-files").list(str(deal_id))
+        if listed:
+            paths = [f"{deal_id}/{f['name']}" for f in listed if f.get("name")]
+            if paths:
+                sb.storage.from_("dataroom-files").remove(paths)
+    except Exception:
+        pass  # Storage cleanup is best-effort; DB delete still proceeds
+
+    # Delete the deal row — cascades to documents, duplicates, lease chains, etc.
+    sb.table("deals").delete().eq("id", str(deal_id)).execute()
+
+    return ApiResponse.ok({"deleted": str(deal_id)})

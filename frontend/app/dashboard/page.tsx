@@ -28,6 +28,10 @@ import { toast } from "sonner"
 
 type ScreenState = "welcome" | "create" | "test"
 
+function toPascalCase(str: string) {
+  return str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1))
+}
+
 function NewProjectDialog({
   open,
   onOpenChange,
@@ -76,7 +80,7 @@ function NewProjectDialog({
             <Input
               id="new-project-title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => setTitle(toPascalCase(e.target.value))}
               placeholder="Enter project title"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && title.trim() && !loading) handleCreate()
@@ -183,12 +187,22 @@ export default function Page() {
     <SidebarProvider className="h-full">
       <AppSidebar
         key={sidebarRefreshKey}
+        onHome={() => {
+          setNextScreen("welcome")
+          setSelectedDealId(null)
+        }}
         onNewProject={() => setNewProjectDialogOpen(true)}
         selectedDealId={selectedDealId}
         onOpenDeal={(id, name) => {
           setSelectedDealId(id)
           setSetupProjectTitle(name)
           setNextScreen("create")
+        }}
+        onDealDeleted={(id) => {
+          if (selectedDealId === id) {
+            setNextScreen("welcome")
+            setSelectedDealId(null)
+          }
         }}
       />
       <SidebarInset className="min-h-0">
@@ -211,6 +225,7 @@ export default function Page() {
         onCreate={(title) => {
           setSetupProjectTitle(title)
           setNextScreen("create")
+          setSidebarRefreshKey((k) => k + 1)
         }}
       />
     </SidebarProvider>
