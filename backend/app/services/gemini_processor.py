@@ -85,6 +85,7 @@ class ProcessingResult:
     classification_reasoning: str = ""
     is_incomplete: bool = False
     incompleteness_reasons: list[str] = field(default_factory=list)
+    is_empty: bool = False
     error: str | None = None
 
 
@@ -299,8 +300,7 @@ def _process_text_file(document: dict, categories: list[dict]) -> ProcessingResu
             category_key="other",
             classification_confidence=0.0,
             classification_reasoning="No text could be extracted from this file.",
-            is_incomplete=True,
-            incompleteness_reasons=["File appears empty or unreadable"],
+            is_empty=True,
         )
 
     client = _get_client()
@@ -443,9 +443,7 @@ def _process_pdf_large(document: dict, categories: list[dict]) -> ProcessingResu
             category_key="other",
             classification_confidence=0.0,
             classification_reasoning="No text could be extracted from any segment.",
-            is_incomplete=True,
-            incompleteness_reasons=["All segments failed to extract"],
-            error="All segments failed",
+            is_empty=True,
         )
 
     # Final classification call with merged text
@@ -486,7 +484,7 @@ def process_deal_documents(deal_id: str) -> int:
     # Fetch documents
     docs = (
         sb.table("documents")
-        .select("id, filename, file_extension, file_size, storage_path, extracted_text")
+        .select("id, filename, file_extension, file_size, storage_path, extracted_text, is_empty, processing_status")
         .eq("deal_id", deal_id)
         .execute()
     ).data
@@ -508,16 +506,29 @@ def process_deal_documents(deal_id: str) -> int:
         categories = cats.data or []
 
     processed = 0
+
+    # Bulk-mark all unprocessed docs as "processing" immediately so the UI
+    # shows feedback as soon as the pipeline starts (before the per-doc loop).
+    unprocessed_ids = [
+        d["id"] for d in docs
+        if not d.get("extracted_text")
+        and not d.get("is_empty")
+        and d.get("processing_status") != "completed"
+    ]
+    if unprocessed_ids:
+        for doc_id in unprocessed_ids:
+            sb.table("documents").update({"processing_status": "processing"}).eq("id", doc_id).execute()
+
     for doc in docs:
-        # Skip if already processed (has extracted_text and classification)
-        if doc.get("extracted_text"):
+        # Skip if already processed (has extracted_text or is marked empty)
+        if doc.get("extracted_text") or doc.get("is_empty"):
             # Mark as completed if not already
             if doc.get("processing_status") != "completed":
                 sb.table("documents").update({"processing_status": "completed"}).eq("id", doc["id"]).execute()
             processed += 1
             continue
 
-        # Mark as processing before starting Gemini call
+        # Mark as processing (already done in bulk above, but re-set in case of retries)
         sb.table("documents").update({"processing_status": "processing"}).eq("id", doc["id"]).execute()
 
         result = process_document(doc, categories)
@@ -538,6 +549,7 @@ def process_deal_documents(deal_id: str) -> int:
             "classification_reasoning": result.classification_reasoning or None,
             "is_incomplete": result.is_incomplete,
             "incompleteness_reasons": result.incompleteness_reasons or None,
+            "is_empty": result.is_empty,
             "processing_status": "completed",
             "classified_at": datetime.now(timezone.utc).isoformat(),
         }

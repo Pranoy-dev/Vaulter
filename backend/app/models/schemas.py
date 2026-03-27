@@ -116,6 +116,7 @@ class DocumentResponse(BaseModel):
     classification_reasoning: str | None = None
     is_incomplete: bool = False
     incompleteness_reasons: list[str] | None = None
+    is_empty: bool = False
     processing_status: str = "pending"
     processing_error: str | None = None
     created_at: datetime

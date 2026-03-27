@@ -228,8 +228,8 @@ async def upload_complete(
         # Push to Supabase Storage (date-prefixed path)
         storage_path = upload_file(str(deal_id), relative_path, content, content_type)
 
-        # Insert document metadata
-        sb.table("documents").insert({
+        # Upsert document — resets all processing fields if file already exists
+        sb.table("documents").upsert({
             "deal_id": str(deal_id),
             "original_path": relative_path,
             "filename": filename,
@@ -239,7 +239,18 @@ async def upload_complete(
             "sha256_hash": sha256,
             "storage_path": storage_path,
             "rag_indexed": False,
-        }).execute()
+            "rag_indexed_at": None,
+            "assigned_category": "other",
+            "classification_confidence": 0,
+            "classification_reasoning": None,
+            "extracted_text": None,
+            "is_incomplete": False,
+            "incompleteness_reasons": None,
+            "is_empty": False,
+            "processing_status": "pending",
+            "processing_error": None,
+            "classified_at": None,
+        }, on_conflict="deal_id,original_path").execute()
         uploaded_count += 1
 
     # Parse skipped files JSON (sent by client)

@@ -20,6 +20,7 @@ export interface DealDocument {
   classification_reasoning: string | null
   is_incomplete: boolean
   incompleteness_reasons: string[] | null
+  is_empty: boolean
   processing_status: "pending" | "processing" | "completed" | "failed"
   processing_error: string | null
   rag_indexed: boolean

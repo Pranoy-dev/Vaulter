@@ -238,6 +238,8 @@ function TreeNodeRow({ node, depth = 0, showStatus = false }: { node: TreeNode; 
                     className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
                     title={doc.processing_error ?? "Processing failed"}
                   >Failed</span>
+                ) : doc.is_empty ? (
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
                 ) : doc.classification_confidence > 0 ? (
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
                     {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
@@ -277,10 +279,40 @@ function FileStructurePanel({ documents, loading, showStatus = false }: { docume
           <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} />
         ))}
         {rootFiles.map((doc) => (
-          <div key={doc.id} className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30">
-            <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />
+          <div key={doc.id} className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30">
+            {showStatus && doc.processing_status === "processing"
+              ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+              : showStatus && doc.classification_confidence > 0
+                ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
+                : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
             <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
             <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+            {showStatus && (
+              <>
+                {doc.processing_status === "processing" ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
+                ) : doc.processing_status === "failed" ? (
+                  <span
+                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                    title={doc.processing_error ?? "Processing failed"}
+                  >Failed</span>
+                ) : doc.is_empty ? (
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
+                ) : doc.classification_confidence > 0 ? (
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
+                    {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                )}
+                {doc.is_incomplete && (
+                  <span
+                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                    title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
+                  >Incomplete</span>
+                )}
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -686,7 +718,10 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
   const hasDocsNeedingWork =
     dealData.documents.length > 0 &&
     dealData.documents.some(
-      (d) => !d.rag_indexed || d.processing_status === "pending" || d.processing_status === "processing",
+      (d) =>
+        d.processing_status === "processing" ||
+        d.processing_status === "pending" ||
+        (!d.rag_indexed && d.processing_status !== "failed"),
     )
   // Only tick when the relevant tab is active
   const tabNeedsRefresh =
@@ -810,7 +845,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
         (f) => !existingPaths.has(f.relativePath) || overwriteSet.has(f.relativePath),
       )
       const result = await uploadFiles(dealId, filesToUpload, getToken, setUploadProgress, ac.signal)
-      setSkippedFiles(result.skippedFiles)
+      setSkippedFiles((prev) => {
+        const merged = [...prev]
+        for (const p of result.skippedFiles) {
+          if (!merged.includes(p)) merged.push(p)
+        }
+        return merged
+      })
       setShowDropzone(false)
       dealData.refresh()
       toast.success(
@@ -834,7 +875,6 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
 
   const resetUpload = () => {
     setSelectedFiles([])
-    setSkippedFiles([])
     setOverwriteSet(new Set())
     setUploadProgress({ overall: 0, files: {}, state: "idle" })
     setShowDropzone(true)
@@ -959,22 +999,30 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                 {!showDropzone && dealData.documents.length > 0 && !isUploading && (
                   <div className="space-y-3">
                     {/* ── Block 1: Failed / Skipped files ── */}
-                    {dealData.skippedFiles.length > 0 && (
+                    {skippedFiles.length > 0 && (
                       <div className="rounded-xl border border-red-200/80 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20 overflow-hidden">
                         <div className="flex items-center gap-2 border-b border-red-200/60 dark:border-red-800/40 px-4 py-2.5">
                           <AlertTriangle className="size-3.5 shrink-0 text-red-400" />
-                          <span className="text-xs font-semibold text-red-600 dark:text-red-400">
-                            {dealData.skippedFiles.length} skipped
+                          <span className="min-w-0 flex-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                            {skippedFiles.length} skipped
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => setSkippedFiles([])}
+                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/40 transition-colors"
+                          >
+                            <X className="size-3" />
+                            Clear
+                          </button>
                         </div>
                         {/* Table header */}
                         <div className="grid grid-cols-[1fr_160px] items-center gap-2 border-b border-red-200/50 dark:border-red-800/30 bg-red-100/40 dark:bg-red-950/30 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-500/70 dark:text-red-400/60">
                           <span>File</span>
                           <span>Skip reason</span>
                         </div>
-                        <div className={dealData.skippedFiles.length > 10 ? "max-h-[280px] overflow-y-auto" : ""}>
+                          <div className={skippedFiles.length > 10 ? "max-h-[280px] overflow-y-auto" : ""}>
                           <div className="divide-y divide-red-200/40 dark:divide-red-800/30">
-                            {dealData.skippedFiles.map((path) => (
+                            {skippedFiles.map((path) => (
                               <div key={path} className="grid grid-cols-[1fr_160px] items-center gap-2 px-4 py-1.5 text-xs">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <X className="size-3.5 shrink-0 text-red-300 dark:text-red-600" />
@@ -1136,6 +1184,10 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                                           >
                                             Failed
                                           </span>
+                                        ) : doc.is_empty ? (
+                                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+                                            Empty
+                                          </span>
                                         ) : classified ? (
                                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
                                             {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
@@ -1148,7 +1200,11 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                                       </div>
                                       {/* Status / Incomplete */}
                                       <div className="flex justify-center">
-                                        {doc.is_incomplete ? (
+                                        {doc.is_empty ? (
+                                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
+                                            Empty
+                                          </span>
+                                        ) : doc.is_incomplete ? (
                                           <span
                                             className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
                                             title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}

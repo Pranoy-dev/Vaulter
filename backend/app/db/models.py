@@ -136,6 +136,7 @@ class Document(Base):
     extracted_text = Column(Text, nullable=True)
     is_incomplete = Column(Boolean, nullable=False, default=False)
     incompleteness_reasons = Column(JSONB, nullable=True)
+    is_empty = Column(Boolean, nullable=False, default=False)
     processing_status = Column(Text, nullable=False, server_default="pending")
     processing_error = Column(Text, nullable=True)
     rag_indexed = Column(Boolean, nullable=False, default=False)
