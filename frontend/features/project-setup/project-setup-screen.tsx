@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { DemoAgentProcessingLog } from "@/features/project-setup/demo-workspace/demo-agent-processing-log"
 import { DEMO_WORKSPACE_TITLE } from "@/features/project-setup/demo-workspace/mock-data"
 import {
@@ -150,49 +151,107 @@ function AiInsightsPanel({ documents, loading }: { documents: DealDocument[]; lo
   )
 }
 
+// ── File tree helpers ────────────────────────────────────────────────────────
+
+interface TreeNode {
+  name: string
+  path: string
+  children: Record<string, TreeNode>
+  files: DealDocument[]
+}
+
+function buildTree(documents: DealDocument[]): TreeNode {
+  const root: TreeNode = { name: "", path: "", children: {}, files: [] }
+  for (const doc of documents) {
+    const parts = doc.original_path.split("/")
+    let node = root
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i]
+      if (!node.children[seg]) {
+        const p = parts.slice(0, i + 1).join("/")
+        node.children[seg] = { name: seg, path: p, children: {}, files: [] }
+      }
+      node = node.children[seg]
+    }
+    node.files.push(doc)
+  }
+  return root
+}
+
+function TreeNodeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
+  const [open, setOpen] = React.useState(true)
+  const hasChildren = Object.keys(node.children).length > 0
+  const indent = depth * 16
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted/50 transition-colors"
+          style={{ paddingLeft: `${8 + indent}px` }}
+        >
+          <ChevronRight
+            className={`size-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-150 ${
+              open ? "rotate-90" : ""
+            }`}
+          />
+          <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-left" title={node.name}>{node.name}</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground/50 tabular-nums">
+            {node.files.length + Object.values(node.children).reduce((s, c) => s + c.files.length, 0)}
+          </span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {/* Sub-folders */}
+        {Object.values(node.children)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((child) => (
+            <TreeNodeRow key={child.path} node={child} depth={depth + 1} />
+          ))}
+        {/* Files in this folder */}
+        {node.files.map((doc) => (
+          <div
+            key={doc.id}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30"
+            style={{ paddingLeft: `${8 + indent + 20}px` }}
+          >
+            <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />
+            <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
+            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+          </div>
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 function FileStructurePanel({ documents, loading }: { documents: DealDocument[]; loading: boolean }) {
   if (loading) return <LoadingRows />
   if (documents.length === 0)
     return <EmptyState icon={FolderTree} message="No files yet — upload to see folder structure." />
 
-  // Build folder tree
-  const tree: Record<string, DealDocument[]> = {}
-  for (const doc of documents) {
-    const parts = doc.original_path.split("/")
-    const folder = parts.length > 1 ? parts.slice(0, -1).join("/") : "/"
-    if (!tree[folder]) tree[folder] = []
-    tree[folder].push(doc)
-  }
+  const root = buildTree(documents)
+  const topLevel = Object.values(root.children).sort((a, b) => a.name.localeCompare(b.name))
+  // If there are root-level files (no folder), show them too
+  const rootFiles = root.files
 
   return (
-    <div className="space-y-2 pr-1">
-        {Object.entries(tree)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([folder, docs]) => (
-            <div key={folder} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
-                <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-xs font-medium" title={folder}>
-                  {folder === "/" ? "Root" : folder}
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground/70">{docs.length}</span>
-              </div>
-              <div className="divide-y divide-border/30">
-                {docs.map((doc) => (
-                  <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5">
-                    <FileIcon className="size-3 shrink-0 text-muted-foreground/50" />
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={doc.filename}>
-                      {doc.filename}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground/50 tabular-nums">
-                      {formatBytes(doc.file_size)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+    <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
+      <div className="divide-y divide-border/20">
+        {topLevel.map((node) => (
+          <TreeNodeRow key={node.path} node={node} depth={0} />
+        ))}
+        {rootFiles.map((doc) => (
+          <div key={doc.id} className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30">
+            <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />
+            <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
+            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+          </div>
+        ))}
       </div>
+    </div>
   )
 }
 
