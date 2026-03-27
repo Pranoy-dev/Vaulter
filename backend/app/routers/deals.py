@@ -34,6 +34,15 @@ def _resolve_user_id(clerk_user_id: str) -> uuid.UUID:
     return uuid.UUID(upsert.data[0]["id"])
 
 
+def _resolve_company_id(clerk_user_id: str) -> str | None:
+    """Lookup company_id for a Clerk user. Returns string UUID or None."""
+    sb = get_supabase()
+    result = sb.table("users").select("company_id").eq("clerk_user_id", clerk_user_id).execute()
+    if result.data and result.data[0].get("company_id"):
+        return result.data[0]["company_id"]
+    return None
+
+
 def _verify_deal_ownership(deal_id: uuid.UUID, user_id: uuid.UUID) -> dict:
     """Fetch deal and verify the user owns it."""
     sb = get_supabase()
@@ -50,11 +59,15 @@ def _verify_deal_ownership(deal_id: uuid.UUID, user_id: uuid.UUID) -> dict:
 @router.post("", status_code=201)
 async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current_user_id)):
     user_id = _resolve_user_id(clerk_user_id)
+    company_id = _resolve_company_id(clerk_user_id)
     sb = get_supabase()
-    result = sb.table("deals").insert({
+    insert_data = {
         "user_id": str(user_id),
         "name": body.name,
-    }).execute()
+    }
+    if company_id:
+        insert_data["company_id"] = company_id
+    result = sb.table("deals").insert(insert_data).execute()
     return ApiResponse.ok(result.data[0])
 
 

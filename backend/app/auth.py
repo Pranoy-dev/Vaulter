@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import contextvars
+import json
+import os
 
 import httpx
 from fastapi import Depends, HTTPException, Request
@@ -17,6 +19,13 @@ user_just_created: contextvars.ContextVar[bool] = contextvars.ContextVar(
 )
 
 _jwks_cache: dict | None = None
+
+# Load default classifications once at module level
+_DEFAULT_CLASSIFICATIONS_PATH = os.path.join(
+    os.path.dirname(__file__), "default_classifications.json"
+)
+with open(_DEFAULT_CLASSIFICATIONS_PATH, "r", encoding="utf-8") as _f:
+    DEFAULT_CLASSIFICATIONS: list[dict] = json.load(_f)
 
 
 async def _get_jwks() -> dict:
@@ -85,14 +94,20 @@ async def get_current_user_id(request: Request) -> str:
 async def _ensure_user_exists(clerk_user_id: str) -> bool:
     """Upsert user into DB on first login using Clerk's backend API.
 
+    On first login, also creates a company (named after the user) and seeds
+    it with the default classification categories.
+
     Returns True if a new user row was created, False if it already existed.
     """
     sb = get_supabase()
 
     # Check if user already exists — skip API call if so
-    existing = sb.table("users").select("id").eq("clerk_user_id", clerk_user_id).execute()
+    existing = sb.table("users").select("id, company_id").eq("clerk_user_id", clerk_user_id).execute()
     if existing.data:
         user_just_created.set(False)
+        # Backfill company for users created before the company feature was added
+        if not existing.data[0].get("company_id"):
+            await _backfill_company(clerk_user_id, existing.data[0]["id"])
         return False
 
     # Fetch full user info from Clerk API
@@ -105,10 +120,15 @@ async def _ensure_user_exists(clerk_user_id: str) -> bool:
 
     if resp.status_code != 200:
         # Don't block auth if Clerk API is unreachable — store minimal record
+        company = sb.table("companies").insert({"name": clerk_user_id}).execute()
+        company_id = company.data[0]["id"]
+
         sb.table("users").upsert(
-            {"clerk_user_id": clerk_user_id, "email": ""},
+            {"clerk_user_id": clerk_user_id, "email": "", "company_id": company_id},
             on_conflict="clerk_user_id",
         ).execute()
+
+        _seed_default_classifications(sb, company_id)
         user_just_created.set(True)
         return True
 
@@ -117,12 +137,69 @@ async def _ensure_user_exists(clerk_user_id: str) -> bool:
     email = email_addresses[0].get("email_address", "") if email_addresses else ""
     name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
 
+    # Create company named after the user
+    company_name = name or email.split("@")[0] if email else clerk_user_id
+    company = sb.table("companies").insert({"name": company_name}).execute()
+    company_id = company.data[0]["id"]
+
     sb.table("users").upsert(
-        {"clerk_user_id": clerk_user_id, "email": email, "name": name or None},
+        {
+            "clerk_user_id": clerk_user_id,
+            "email": email,
+            "name": name or None,
+            "company_id": company_id,
+        },
         on_conflict="clerk_user_id",
     ).execute()
+
+    _seed_default_classifications(sb, company_id)
     user_just_created.set(True)
     return True
+
+
+def _seed_default_classifications(sb, company_id: str) -> None:
+    """Insert the default classification rows for a new company."""
+    rows = [
+        {
+            "company_id": company_id,
+            "key": c["key"],
+            "label": c["label"],
+            "description": c["description"],
+            "display_order": c["display_order"],
+        }
+        for c in DEFAULT_CLASSIFICATIONS
+    ]
+    if rows:
+        sb.table("company_classifications").insert(rows).execute()
+
+
+async def _backfill_company(clerk_user_id: str, user_id: str) -> None:
+    """Create a company + seed classifications for a pre-existing user with no company."""
+    sb = get_supabase()
+
+    # Try to fetch name/email from Clerk to use as company name
+    company_name = clerk_user_id
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.clerk.com/v1/users/{clerk_user_id}",
+                headers={"Authorization": f"Bearer {settings.clerk_secret_key}"},
+                timeout=10,
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+            email_addresses = data.get("email_addresses", [])
+            email = email_addresses[0].get("email_address", "") if email_addresses else ""
+            company_name = name or (email.split("@")[0] if email else clerk_user_id)
+    except Exception:
+        pass
+
+    company = sb.table("companies").insert({"name": company_name}).execute()
+    company_id = company.data[0]["id"]
+
+    sb.table("users").update({"company_id": company_id}).eq("id", user_id).execute()
+    _seed_default_classifications(sb, company_id)
 
 
 CurrentUserId = Depends(get_current_user_id)

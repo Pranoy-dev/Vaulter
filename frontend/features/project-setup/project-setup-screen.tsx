@@ -30,6 +30,7 @@ import {
   FolderTree,
   FolderUp,
   GripVertical,
+  LayoutGrid,
   Link2,
   Loader2,
   PanelRightClose,
@@ -44,6 +45,8 @@ import { uploadFiles, isSupported } from "@/lib/chunked-upload"
 import { toast } from "sonner"
 import { useDealData } from "@/hooks/use-deal-data"
 import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-data"
+import { useClassifications } from "@/hooks/use-classifications"
+import type { Classification } from "@/hooks/use-classifications"
 
 export type SetupSection =
   | "upload"
@@ -299,6 +302,110 @@ function DuplicationPanel({ groups, loading }: { groups: DuplicateGroup[]; loadi
   )
 }
 
+// ── Classification panel ────────────────────────────────────────────────────
+
+const CATEGORY_ICONS: Record<string, string> = {
+  leases_amendments: "📄",
+  financial: "💰",
+  technical_environmental: "🔧",
+  corporate_legal: "⚖️",
+  other: "📁",
+}
+
+const CATEGORY_BAR_COLORS: Record<string, string> = {
+  leases_amendments: "bg-blue-400",
+  financial: "bg-emerald-400",
+  technical_environmental: "bg-orange-400",
+  corporate_legal: "bg-purple-400",
+  other: "bg-zinc-400",
+}
+
+function ClassificationPanel({
+  classifications,
+  documents,
+  loading,
+}: {
+  classifications: Classification[]
+  documents: DealDocument[]
+  loading: boolean
+}) {
+  if (loading) return <LoadingRows />
+  if (classifications.length === 0)
+    return (
+      <EmptyState
+        icon={LayoutGrid}
+        message="No classifications defined — they will appear once your company is set up."
+      />
+    )
+
+  // Count files per classification key
+  const countByKey = documents.reduce<Record<string, number>>((acc, d) => {
+    acc[d.assigned_category] = (acc[d.assigned_category] ?? 0) + 1
+    return acc
+  }, {})
+
+  const active = classifications.filter((c) => c.is_active)
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {active.map((clf) => {
+        const count = countByKey[clf.key] ?? 0
+        const colorClass = CATEGORY_COLORS[clf.key] ?? CATEGORY_COLORS.other
+        const emoji = CATEGORY_ICONS[clf.key] ?? "📁"
+        return (
+          <div
+            key={clf.id}
+            className="flex flex-col gap-2 rounded-xl border border-border/70 bg-background/80 px-4 py-3.5 transition-shadow hover:shadow-sm"
+          >
+            {/* Header row */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base leading-none" aria-hidden>
+                  {emoji}
+                </span>
+                <span className="text-sm font-semibold leading-tight">{clf.label}</span>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                  count > 0 ? colorClass : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                }`}
+              >
+                {count} {count === 1 ? "file" : "files"}
+              </span>
+            </div>
+            {/* Description */}
+            {clf.description && (
+              <p className="text-xs leading-relaxed text-muted-foreground">{clf.description}</p>
+            )}
+            {/* Progress bar — proportion of total classified docs */}
+            {documents.length > 0 && (
+              <div className="space-y-1">
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      count > 0
+                        ? (CATEGORY_BAR_COLORS[clf.key] ?? "bg-zinc-400")
+                        : "bg-zinc-200 dark:bg-zinc-700"
+                    }`}
+                    style={{
+                      width: `${documents.length > 0 ? Math.round((count / documents.length) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground/60 tabular-nums">
+                  {documents.length > 0
+                    ? `${Math.round((count / documents.length) * 100)}% of documents`
+                    : "No documents uploaded yet"}
+                </p>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loading: boolean }) {
   if (loading) return <LoadingRows />
   if (chains.length === 0)
@@ -366,6 +473,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
 
   // ── Real deal data ────────────────────────────────────────────────────────
   const dealData = useDealData(dealId)
+  const { classifications, loading: classificationsLoading } = useClassifications()
 
   const startDrag = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -560,11 +668,11 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="file-structure"
-                aria-label="File structure"
+                aria-label="Classification"
                 className={sectionToggleItemClass}
               >
-                <FolderTree aria-hidden />
-                File Structure
+                <LayoutGrid aria-hidden />
+                Classification
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="duplication"
@@ -612,16 +720,26 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                         <div className="flex items-center gap-2 border-b border-red-200/60 dark:border-red-800/40 px-4 py-2.5">
                           <AlertTriangle className="size-3.5 shrink-0 text-red-400" />
                           <span className="text-xs font-semibold text-red-600 dark:text-red-400">
-                            {dealData.skippedFiles.length} failed — unsupported format
+                            {dealData.skippedFiles.length} skipped
                           </span>
+                        </div>
+                        {/* Table header */}
+                        <div className="grid grid-cols-[1fr_160px] items-center gap-2 border-b border-red-200/50 dark:border-red-800/30 bg-red-100/40 dark:bg-red-950/30 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-500/70 dark:text-red-400/60">
+                          <span>File</span>
+                          <span>Skip reason</span>
                         </div>
                         <div className={dealData.skippedFiles.length > 10 ? "max-h-[280px] overflow-y-auto" : ""}>
                           <div className="divide-y divide-red-200/40 dark:divide-red-800/30">
                             {dealData.skippedFiles.map((path) => (
-                              <div key={path} className="flex items-center gap-2 px-4 py-1.5 text-xs">
-                                <X className="size-3.5 shrink-0 text-red-300 dark:text-red-600" />
-                                <span className="min-w-0 flex-1 truncate text-red-400 line-through decoration-red-300/60" title={path}>
-                                  {path}
+                              <div key={path} className="grid grid-cols-[1fr_160px] items-center gap-2 px-4 py-1.5 text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <X className="size-3.5 shrink-0 text-red-300 dark:text-red-600" />
+                                  <span className="min-w-0 flex-1 truncate text-red-400 line-through decoration-red-300/60" title={path}>
+                                    {path}
+                                  </span>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:bg-red-950/50 dark:text-red-400">
+                                  Unsupported format
                                 </span>
                               </div>
                             ))}
@@ -716,7 +834,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                                         </span>
                                       ) : (
                                         <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                                          Pending
+                                          Classification pending
                                         </span>
                                       )}
                                     </div>
@@ -956,53 +1074,95 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                     )}
 
                     {/* Per-file list */}
-                    <ScrollArea className="max-h-[40vh]">
-                      <div className="space-y-0.5">
-                        {selectedFiles.map((entry) => {
-                          const supported = isSupported(entry.relativePath)
-                          const isConflict = existingPathSet.has(entry.relativePath) && supported
-                          const willOverwrite = overwriteSet.has(entry.relativePath)
-                          const willSkip = isConflict && !willOverwrite
-                          const fp = uploadProgress.files[entry.relativePath]
-                          const pct = fp ? Math.round(fp.progress * 100) : 0
-                          const isDone = fp && fp.uploadedChunks === fp.totalChunks && fp.totalChunks > 0
-                          return (
-                            <div
-                              key={entry.relativePath}
-                              className={`group flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-muted/30 ${!supported || willSkip ? "opacity-60" : ""}`}
-                            >
-                              {!supported ? (
-                                <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
-                              ) : isDone ? (
-                                <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
-                              ) : isConflict ? (
-                                <AlertTriangle className="size-3.5 shrink-0 text-orange-400" />
-                              ) : (
-                                <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                              )}
-                              <span
-                                className={`min-w-0 flex-1 truncate ${!supported ? "text-amber-600 line-through decoration-amber-400/60" : willSkip ? "text-muted-foreground/50 line-through" : "text-muted-foreground"}`}
-                                title={entry.relativePath}
-                              >
-                                {entry.relativePath}
-                              </span>
-                              <span className="shrink-0 tabular-nums text-muted-foreground/70">
-                                {formatBytes(entry.file.size)}
-                              </span>
-                              {!supported ? (
-                                <span className="shrink-0 text-amber-500">skipped</span>
-                              ) : willSkip && uploadProgress.state === "idle" ? (
-                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground/60">skip</span>
-                              ) : fp && uploadProgress.state !== "idle" && !isDone ? (
-                                <span className="w-8 shrink-0 text-right tabular-nums text-muted-foreground/70">
+                    <div className="rounded-xl border border-border/60 overflow-hidden">
+                      {/* Table header */}
+                      <div className="grid grid-cols-[1fr_72px_140px] items-center gap-2 border-b border-border/50 bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                        <span>File</span>
+                        <span className="text-right">Size</span>
+                        <span>Status / Reason</span>
+                      </div>
+                      <ScrollArea className="max-h-[40vh]">
+                        <div className="divide-y divide-border/30">
+                          {selectedFiles.map((entry) => {
+                            const supported = isSupported(entry.relativePath)
+                            const isConflict = existingPathSet.has(entry.relativePath) && supported
+                            const willOverwrite = overwriteSet.has(entry.relativePath)
+                            const willSkip = isConflict && !willOverwrite
+                            const fp = uploadProgress.files[entry.relativePath]
+                            const pct = fp ? Math.round(fp.progress * 100) : 0
+                            const isDone = fp && fp.uploadedChunks === fp.totalChunks && fp.totalChunks > 0
+
+                            let statusBadge: React.ReactNode
+                            if (!supported) {
+                              statusBadge = (
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                                  Unsupported format
+                                </span>
+                              )
+                            } else if (isDone) {
+                              statusBadge = (
+                                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400">
+                                  Uploaded ✓
+                                </span>
+                              )
+                            } else if (fp && uploadProgress.state !== "idle") {
+                              statusBadge = (
+                                <span className="tabular-nums text-[11px] text-muted-foreground/70">
                                   {pct}%
                                 </span>
-                              ) : null}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </ScrollArea>
+                              )
+                            } else if (willSkip) {
+                              statusBadge = (
+                                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground/60">
+                                  Already exists — skip
+                                </span>
+                              )
+                            } else if (willOverwrite) {
+                              statusBadge = (
+                                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700 dark:bg-orange-950/50 dark:text-orange-400">
+                                  Will overwrite
+                                </span>
+                              )
+                            } else {
+                              statusBadge = (
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
+                                  Ready
+                                </span>
+                              )
+                            }
+
+                            return (
+                              <div
+                                key={entry.relativePath}
+                                className={`grid grid-cols-[1fr_72px_140px] items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/20 ${!supported || willSkip ? "opacity-60" : ""}`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {!supported ? (
+                                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+                                  ) : isDone ? (
+                                    <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                                  ) : isConflict ? (
+                                    <AlertTriangle className="size-3.5 shrink-0 text-orange-400" />
+                                  ) : (
+                                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                                  )}
+                                  <span
+                                    className={`min-w-0 flex-1 truncate ${!supported ? "text-amber-600 line-through decoration-amber-400/60" : willSkip ? "text-muted-foreground/50 line-through" : "text-muted-foreground"}`}
+                                    title={entry.relativePath}
+                                  >
+                                    {entry.relativePath}
+                                  </span>
+                                </div>
+                                <span className="shrink-0 text-right tabular-nums text-muted-foreground/70">
+                                  {formatBytes(entry.file.size)}
+                                </span>
+                                <div>{statusBadge}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </ScrollArea>
+                    </div>
 
                     {/* Skipped-files banner — shown after upload completes */}
                     {skippedFiles.length > 0 && uploadProgress.state === "done" && (
@@ -1034,7 +1194,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
               isDemoWorkspace ? (
                 <DemoFileStructurePanel />
               ) : (
-                <FileStructurePanel documents={dealData.documents} loading={dealData.loading} />
+                <div className="space-y-4">
+                  <ClassificationPanel
+                    classifications={classifications}
+                    documents={dealData.documents}
+                    loading={classificationsLoading}
+                  />
+                </div>
               )
             ) : null}
             {section === "duplication" ? (
@@ -1051,6 +1217,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                 <LeaseAmendmentPanel chains={dealData.leaseChains} loading={dealData.loading} />
               )
             ) : null}
+
           </div>
         </div>
 

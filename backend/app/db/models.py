@@ -27,6 +27,44 @@ class Base(DeclarativeBase):
     pass
 
 
+# ── COMPANIES ────────────────────────────────────────────────────────────────
+
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    users = relationship("User", back_populates="company", cascade="all, delete-orphan")
+    deals = relationship("Deal", back_populates="company", cascade="all, delete-orphan")
+    classifications = relationship("CompanyClassification", back_populates="company", cascade="all, delete-orphan")
+
+
+# ── COMPANY CLASSIFICATIONS ─────────────────────────────────────────────────
+
+class CompanyClassification(Base):
+    __tablename__ = "company_classifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False)
+    key = Column(Text, nullable=False)
+    label = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    company = relationship("Company", back_populates="classifications")
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "key", name="uq_company_classification_key"),
+        Index("idx_classifications_company", "company_id"),
+    )
+
+
 # ── USERS ────────────────────────────────────────────────────────────────────
 
 class User(Base):
@@ -36,9 +74,11 @@ class User(Base):
     clerk_user_id = Column(Text, unique=True, nullable=False)
     email = Column(Text, nullable=False)
     name = Column(Text)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
+    company = relationship("Company", back_populates="users")
     deals = relationship("Deal", back_populates="user", cascade="all, delete-orphan")
 
 
@@ -49,6 +89,7 @@ class Deal(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     name = Column(Text, nullable=False)
     status = Column(
         Enum("created", "uploading", "uploaded", "processing", "completed", "failed",
@@ -63,6 +104,7 @@ class Deal(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="deals")
+    company = relationship("Company", back_populates="deals")
     documents = relationship("Document", back_populates="deal", cascade="all, delete-orphan")
     duplicate_groups = relationship("DuplicateGroup", back_populates="deal", cascade="all, delete-orphan")
     lease_chains = relationship("LeaseChain", back_populates="deal", cascade="all, delete-orphan")
@@ -70,6 +112,7 @@ class Deal(Base):
 
     __table_args__ = (
         Index("idx_deals_user", "user_id"),
+        Index("idx_deals_company", "company_id"),
     )
 
 

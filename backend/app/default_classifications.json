@@ -1,0 +1,32 @@
+[
+  {
+    "key": "leases_amendments",
+    "label": "Leases & Amendments",
+    "description": "All tenancy-related legal documents.",
+    "display_order": 1
+  },
+  {
+    "key": "financial",
+    "label": "Financial Documents",
+    "description": "Rent rolls, financial models, cash flow statements, budgets.",
+    "display_order": 2
+  },
+  {
+    "key": "technical_environmental",
+    "label": "Technical & Environmental",
+    "description": "Inspection reports, condition surveys, environmental assessments.",
+    "display_order": 3
+  },
+  {
+    "key": "corporate_legal",
+    "label": "Corporate & Legal",
+    "description": "SPAs, shareholder docs, company certificates, permits.",
+    "display_order": 4
+  },
+  {
+    "key": "other",
+    "label": "Other",
+    "description": "Anything that cannot be classified with sufficient confidence.",
+    "display_order": 5
+  }
+]

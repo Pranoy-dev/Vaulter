@@ -218,3 +218,44 @@ class UploadCompleteResponse(BaseModel):
 class ClerkWebhookPayload(BaseModel):
     data: dict
     type: str
+
+
+# ── Companies ────────────────────────────────────────────────────────────────
+
+class CompanyResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# ── Classifications ──────────────────────────────────────────────────────────
+
+class ClassificationResponse(BaseModel):
+    id: uuid.UUID
+    company_id: uuid.UUID
+    key: str
+    label: str
+    description: str | None
+    display_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ClassificationListResponse(BaseModel):
+    classifications: list[ClassificationResponse]
+
+
+class ClassificationCreate(BaseModel):
+    key: str = Field(..., min_length=1, max_length=100)
+    label: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
+    display_order: int = 0
+
+
+class ClassificationUpdate(BaseModel):
+    label: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    display_order: int | None = None
+    is_active: bool | None = None

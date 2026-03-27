@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.models.schemas import ApiResponse
-from app.routers import deals, processing, upload, webhooks
+from app.routers import classifications, deals, processing, upload, webhooks
 from app.auth import get_current_user_id
 
 import logging
@@ -128,6 +128,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.include_router(deals.router, prefix="/api/deals", tags=["deals"])
 app.include_router(upload.router, prefix="/api/deals", tags=["upload"])
 app.include_router(processing.router, prefix="/api/deals", tags=["processing"])
+app.include_router(classifications.router, prefix="/api/classifications", tags=["classifications"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 
 
@@ -152,4 +153,13 @@ async def get_me(clerk_user_id: str = Depends(get_current_user_id)):
     rows = sb.table("users").select("*").eq("clerk_user_id", clerk_user_id).execute()
     if not rows.data:
         return ApiResponse.ok({"clerk_user_id": clerk_user_id, "synced": False, "created": False})
-    return ApiResponse.ok({**rows.data[0], "synced": True, "created": created})
+
+    user_data = rows.data[0]
+    # Fetch company info if available
+    company_data = None
+    if user_data.get("company_id"):
+        company_rows = sb.table("companies").select("*").eq("id", user_data["company_id"]).execute()
+        if company_rows.data:
+            company_data = company_rows.data[0]
+
+    return ApiResponse.ok({**user_data, "company": company_data, "synced": True, "created": created})
