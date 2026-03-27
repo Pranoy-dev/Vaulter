@@ -40,7 +40,7 @@ import {
 } from "lucide-react"
 import type { FileEntry, UploadProgress } from "@/lib/chunked-upload"
 import { uploadFiles, isSupported } from "@/lib/chunked-upload"
-import { ProcessingStatusPanel } from "@/components/processing-status-panel"
+import { toast } from "sonner"
 import { useDealData } from "@/hooks/use-deal-data"
 import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-data"
 
@@ -165,8 +165,7 @@ function FileStructurePanel({ documents, loading }: { documents: DealDocument[];
   }
 
   return (
-    <ScrollArea className="max-h-[60vh]">
-      <div className="space-y-2 pr-1">
+    <div className="space-y-2 pr-1">
         {Object.entries(tree)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([folder, docs]) => (
@@ -194,7 +193,6 @@ function FileStructurePanel({ documents, loading }: { documents: DealDocument[];
             </div>
           ))}
       </div>
-    </ScrollArea>
   )
 }
 
@@ -204,8 +202,7 @@ function DuplicationPanel({ groups, loading }: { groups: DuplicateGroup[]; loadi
     return <EmptyState icon={Copy} message="No duplicates detected yet." />
 
   return (
-    <ScrollArea className="max-h-[60vh]">
-      <div className="space-y-2 pr-1">
+    <div className="space-y-2 pr-1">
         {groups.map((group) => (
           <div key={group.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
             <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
@@ -240,7 +237,6 @@ function DuplicationPanel({ groups, loading }: { groups: DuplicateGroup[]; loadi
           </div>
         ))}
       </div>
-    </ScrollArea>
   )
 }
 
@@ -258,8 +254,7 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
   }
 
   return (
-    <ScrollArea className="max-h-[60vh]">
-      <div className="space-y-2 pr-1">
+    <div className="space-y-2 pr-1">
         {chains.map((chain) => (
           <div key={chain.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
             <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
@@ -294,7 +289,6 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
           </div>
         ))}
       </div>
-    </ScrollArea>
   )
 }
 
@@ -343,6 +337,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
   // ── File selection state ──────────────────────────────────────────────────
   const [selectedFiles, setSelectedFiles] = React.useState<FileEntry[]>([])
   const [skippedFiles, setSkippedFiles] = React.useState<string[]>([])
+  // Paths the user has explicitly chosen to overwrite
+  const [overwriteSet, setOverwriteSet] = React.useState<Set<string>>(new Set())
   const [uploadProgress, setUploadProgress] = React.useState<UploadProgress>({
     overall: 0,
     files: {},
@@ -371,14 +367,32 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
 
   const onInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newEntries = filesToEntries(event.target.files)
-    if (newEntries.length) setSelectedFiles(newEntries)
+    if (newEntries.length) {
+      const existingByPath = Object.fromEntries(dealData.documents.map((d) => [d.original_path, d]))
+      const autoOverwrite = new Set(
+        newEntries
+          .filter((f) => isSupported(f.relativePath) && existingByPath[f.relativePath] && existingByPath[f.relativePath].file_size !== f.file.size)
+          .map((f) => f.relativePath),
+      )
+      setOverwriteSet(autoOverwrite)
+      setSelectedFiles(newEntries)
+    }
   }
 
   const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setIsDragging(false)
     const newEntries = filesToEntries(event.dataTransfer.files)
-    if (newEntries.length) setSelectedFiles(newEntries)
+    if (newEntries.length) {
+      const existingByPath = Object.fromEntries(dealData.documents.map((d) => [d.original_path, d]))
+      const autoOverwrite = new Set(
+        newEntries
+          .filter((f) => isSupported(f.relativePath) && existingByPath[f.relativePath] && existingByPath[f.relativePath].file_size !== f.file.size)
+          .map((f) => f.relativePath),
+      )
+      setOverwriteSet(autoOverwrite)
+      setSelectedFiles(newEntries)
+    }
   }
 
   // ── Upload handler ────────────────────────────────────────────────────────
@@ -387,16 +401,26 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
     const ac = new AbortController()
     abortRef.current = ac
     try {
-      const result = await uploadFiles(dealId, selectedFiles, getToken, setUploadProgress, ac.signal)
+      const existingPaths = new Set(dealData.documents.map((d) => d.original_path))
+      const filesToUpload = selectedFiles.filter(
+        (f) => !existingPaths.has(f.relativePath) || overwriteSet.has(f.relativePath),
+      )
+      const result = await uploadFiles(dealId, filesToUpload, getToken, setUploadProgress, ac.signal)
       setSkippedFiles(result.skippedFiles)
       setShowDropzone(false)
       dealData.refresh()
+      toast.success(
+        `Upload complete — ${result.filesUploaded} file${result.filesUploaded !== 1 ? "s" : ""} uploaded`,
+        result.skippedFiles.length > 0
+          ? { description: `${result.skippedFiles.length} file${result.skippedFiles.length !== 1 ? "s" : ""} skipped (unsupported format)` }
+          : undefined,
+      )
     } catch (err) {
       if ((err as Error).message !== "Upload cancelled") {
         setUploadProgress((p) => ({ ...p, state: "error", error: (err as Error).message }))
       }
     }
-  }, [dealId, selectedFiles, getToken, dealData])
+  }, [dealId, selectedFiles, overwriteSet, getToken, dealData])
 
   const cancelUpload = () => {
     abortRef.current?.abort()
@@ -407,6 +431,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
   const resetUpload = () => {
     setSelectedFiles([])
     setSkippedFiles([])
+    setOverwriteSet(new Set())
     setUploadProgress({ overall: 0, files: {}, state: "idle" })
     setShowDropzone(true)
     if (fileInputRef.current) fileInputRef.current.value = ""
@@ -500,7 +525,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg px-0.5 pt-1 pb-1 md:px-1">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg px-0.5 pt-1 pb-1 md:px-1">
             {section === "upload" ? (
               <div className="space-y-3">
                 <input
@@ -511,141 +536,139 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                   onChange={onInputChange}
                 />
 
-                {/* Existing files summary + list — shown when project already has files and dropzone is hidden */}
+                {/* Step 1: Loading state */}
+                {dealData.loading ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
+                    <Loader2 className="size-5 animate-spin" />
+                    <span>Loading files…</span>
+                  </div>
+                ) : (
+                  <>
+                {/* Existing files — shown when project already has files and dropzone is hidden */}
                 {!showDropzone && dealData.documents.length > 0 && !isUploading && (
                   <div className="space-y-3">
-                    {/* ── Skipped files card ── */}
+                    {/* ── Block 1: Failed / Skipped files ── */}
                     {dealData.skippedFiles.length > 0 && (
-                      <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/60 dark:border-zinc-800/60 dark:bg-zinc-900/30 overflow-hidden">
-                        <div className="flex items-center gap-2 border-b border-zinc-200/60 dark:border-zinc-800/40 px-4 py-2.5">
-                          <AlertTriangle className="size-3.5 shrink-0 text-zinc-400" />
-                          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                            {dealData.skippedFiles.length} skipped file{dealData.skippedFiles.length !== 1 ? "s" : ""} — unsupported format
+                      <div className="rounded-xl border border-red-200/80 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20 overflow-hidden">
+                        <div className="flex items-center gap-2 border-b border-red-200/60 dark:border-red-800/40 px-4 py-2.5">
+                          <AlertTriangle className="size-3.5 shrink-0 text-red-400" />
+                          <span className="text-xs font-semibold text-red-600 dark:text-red-400">
+                            {dealData.skippedFiles.length} failed — unsupported format
                           </span>
                         </div>
-                        <div className="divide-y divide-zinc-200/40 dark:divide-zinc-800/30">
-                          {dealData.skippedFiles.map((path) => (
-                            <div key={path} className="flex items-center gap-2 px-4 py-1.5 text-xs">
-                              <X className="size-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" />
-                              <span className="min-w-0 flex-1 truncate text-zinc-400 line-through decoration-zinc-300/60" title={path}>
-                                {path}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── Pending processing cards ── */}
-                    {(() => {
-                      const pending = dealData.documents.filter(
-                        (d) => !d.rag_indexed || d.classification_confidence === 0,
-                      )
-                      if (pending.length === 0) return null
-                      return (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20 overflow-hidden">
-                          <div className="flex items-center gap-2 border-b border-amber-200/60 dark:border-amber-900/40 px-4 py-2.5">
-                            <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
-                            <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                              {pending.length} file{pending.length !== 1 ? "s" : ""} pending processing
-                            </span>
-                          </div>
-                          <div className="divide-y divide-amber-200/50 dark:divide-amber-900/30">
-                            {pending.map((doc) => (
-                              <div key={doc.id} className="flex items-center gap-3 px-4 py-2.5">
-                                <FileIcon className="size-3.5 shrink-0 text-amber-400" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-xs font-medium text-amber-800 dark:text-amber-300" title={doc.original_path}>
-                                    {doc.filename}
-                                  </p>
-                                  <p className="truncate text-[11px] text-amber-600/70 dark:text-amber-500/70" title={doc.original_path}>
-                                    {doc.original_path}
-                                  </p>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-1.5">
-                                  {/* RAG badge */}
-                                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                    doc.rag_indexed
-                                      ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-                                  }`}>
-                                    {doc.rag_indexed ? "RAG ✓" : "RAG pending"}
-                                  </span>
-                                  {/* Classification badge */}
-                                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                    doc.classification_confidence > 0
-                                      ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-                                  }`}>
-                                    {doc.classification_confidence > 0
-                                      ? `${CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}`
-                                      : "Classification pending"}
-                                  </span>
-                                </div>
+                        <div className={dealData.skippedFiles.length > 10 ? "max-h-[280px] overflow-y-auto" : ""}>
+                          <div className="divide-y divide-red-200/40 dark:divide-red-800/30">
+                            {dealData.skippedFiles.map((path) => (
+                              <div key={path} className="flex items-center gap-2 px-4 py-1.5 text-xs">
+                                <X className="size-3.5 shrink-0 text-red-300 dark:text-red-600" />
+                                <span className="min-w-0 flex-1 truncate text-red-400 line-through decoration-red-300/60" title={path}>
+                                  {path}
+                                </span>
                               </div>
                             ))}
                           </div>
                         </div>
+                      </div>
+                    )}
+
+                    {/* ── Block 2: Successfully uploaded files with RAG & classification status ── */}
+                    {(() => {
+                      const docs = dealData.documents
+                      const ragCount = docs.filter((d) => d.rag_indexed).length
+                      const classifiedCount = docs.filter((d) => d.classification_confidence > 0).length
+                      const ragPct = docs.length > 0 ? Math.round((ragCount / docs.length) * 100) : 0
+                      const classPct = docs.length > 0 ? Math.round((classifiedCount / docs.length) * 100) : 0
+
+                      return (
+                        <div className="rounded-xl border border-border/70 bg-background/60 overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/50">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium">{docs.length} file{docs.length !== 1 ? "s" : ""} uploaded</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatBytes(docs.reduce((s, d) => s + d.file_size, 0))} total
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={resetUpload}
+                            >
+                              <Plus className="size-3.5" />
+                              Upload More
+                            </Button>
+                          </div>
+                          {/* RAG & Classification summary bars */}
+                          <div className="grid grid-cols-2 gap-2 px-4 py-2.5 border-b border-border/40">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-medium text-muted-foreground">RAG Indexed</span>
+                                <span className="text-[11px] font-semibold tabular-nums">
+                                  {ragCount}/{docs.length} ({ragPct}%)
+                                </span>
+                              </div>
+                              <Progress value={ragPct} className="h-1" />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-medium text-muted-foreground">Classified</span>
+                                <span className="text-[11px] font-semibold tabular-nums">
+                                  {classifiedCount}/{docs.length} ({classPct}%)
+                                </span>
+                              </div>
+                              <Progress value={classPct} className="h-1" />
+                            </div>
+                          </div>
+                          {/* File rows — first 10 always visible, rest scrollable */}
+                          <div className={docs.length > 10 ? "max-h-[320px] overflow-y-auto" : ""}>
+                            <div className="divide-y divide-border/30">
+                              {dealData.loading ? (
+                                <div className="p-3 space-y-2">
+                                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}
+                                </div>
+                              ) : (
+                                docs.map((doc) => {
+                                  const classified = doc.classification_confidence > 0
+                                  const ragged = doc.rag_indexed
+                                  return (
+                                    <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/20">
+                                      {ragged && classified
+                                        ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                                        : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
+                                      }
+                                      <span className="min-w-0 flex-1 truncate text-muted-foreground" title={doc.original_path}>
+                                        {doc.original_path}
+                                      </span>
+                                      <span className="shrink-0 tabular-nums text-muted-foreground/50">
+                                        {formatBytes(doc.file_size)}
+                                      </span>
+                                      {/* RAG status */}
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                        ragged
+                                          ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                                          : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                                      }`}>
+                                        {ragged ? "RAG ✓" : "RAG pending"}
+                                      </span>
+                                      {/* Classification status */}
+                                      {classified ? (
+                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
+                                          {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                                        </span>
+                                      ) : (
+                                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+                                          Pending
+                                        </span>
+                                      )}
+                                    </div>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       )
                     })()}
-
-                    {/* ── All files summary + list ── */}
-                    <div className="rounded-xl border border-border/70 bg-background/60 overflow-hidden">
-                      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/50">
-                        <div>
-                          <p className="text-sm font-medium">{dealData.documents.length} file{dealData.documents.length !== 1 ? "s" : ""} uploaded</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatBytes(dealData.documents.reduce((s, d) => s + d.file_size, 0))} total
-                          </p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 gap-1.5 text-xs"
-                          onClick={resetUpload}
-                        >
-                          <Plus className="size-3.5" />
-                          Upload More
-                        </Button>
-                      </div>
-                      <ScrollArea className="max-h-[35vh]">
-                        <div className="divide-y divide-border/30">
-                          {dealData.loading ? (
-                            <div className="p-3 space-y-2">
-                              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}
-                            </div>
-                          ) : (
-                            dealData.documents.map((doc) => {
-                              const classified = doc.classification_confidence > 0
-                              const ragged = doc.rag_indexed
-                              return (
-                                <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/20">
-                                  {ragged && classified
-                                    ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
-                                    : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
-                                  }
-                                  <span className="min-w-0 flex-1 truncate text-muted-foreground" title={doc.original_path}>
-                                    {doc.original_path}
-                                  </span>
-                                  <span className="shrink-0 tabular-nums text-muted-foreground/50">
-                                    {formatBytes(doc.file_size)}
-                                  </span>
-                                  {classified ? (
-                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
-                                      {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
-                                    </span>
-                                  ) : (
-                                    <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                                      Pending
-                                    </span>
-                                  )}
-                                </div>
-                              )
-                            })
-                          )}
-                        </div>
-                      </ScrollArea>
-                    </div>
                   </div>
                 )}
 
@@ -685,9 +708,20 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                       </p>
                     </div>
                   </div>
-                ) : showDropzone && selectedFiles.length > 0 ? (
+                ) : null}
+
+                {showDropzone && selectedFiles.length > 0 ? (
                   <div className="space-y-3">
                     {/* Selection summary + actions */}
+                    {(() => {
+                      const existingPathSet = new Set(dealData.documents.map((d) => d.original_path))
+                      const serverSizeByPath = Object.fromEntries(dealData.documents.map((d) => [d.original_path, d.file_size]))
+                      const conflictFiles = selectedFiles.filter(
+                        (f) => isSupported(f.relativePath) && existingPathSet.has(f.relativePath),
+                      )
+                      const allOverwritten = conflictFiles.length > 0 && conflictFiles.every((f) => overwriteSet.has(f.relativePath))
+                      return (
+                        <>
                     <div className="flex items-center justify-between gap-2 rounded-xl border border-border/80 bg-muted/30 px-4 py-3">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{folderName}</p>
@@ -697,6 +731,12 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                             <span className="text-amber-500">
                               {" · "}
                               {selectedFiles.filter((f) => !isSupported(f.relativePath)).length} unsupported
+                            </span>
+                          )}
+                          {conflictFiles.length > 0 && (
+                            <span className="text-orange-500">
+                              {" · "}
+                              {conflictFiles.length} already exist
                             </span>
                           )}
                           {" · "}
@@ -747,6 +787,91 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                       </div>
                     </div>
 
+                    {/* Conflict warning card — only shown when existing files are selected */}
+                    {conflictFiles.length > 0 && uploadProgress.state === "idle" && (
+                        <div className="rounded-xl border border-orange-200 bg-orange-50/50 dark:border-orange-900/40 dark:bg-orange-950/20 overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 border-b border-orange-200/60 dark:border-orange-800/40 px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="size-3.5 shrink-0 text-orange-500" />
+                              <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">
+                                {conflictFiles.length} file{conflictFiles.length !== 1 ? "s" : ""} already exist
+                              </span>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 gap-1.5 text-xs text-orange-700 hover:bg-orange-100 hover:text-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/30"
+                              onClick={() => {
+                                if (allOverwritten) {
+                                  setOverwriteSet(new Set())
+                                } else {
+                                  setOverwriteSet(new Set(conflictFiles.map((f) => f.relativePath)))
+                                }
+                              }}
+                            >
+                              {allOverwritten ? "Skip All" : "Overwrite All"}
+                            </Button>
+                          </div>
+                          {/* Table header */}
+                          <div className="grid grid-cols-[1fr_80px_80px_90px_90px] items-center gap-2 border-b border-orange-200/40 dark:border-orange-800/30 bg-orange-100/40 dark:bg-orange-950/30 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-orange-600/70 dark:text-orange-500/60">
+                            <span>File</span>
+                            <span className="text-right">Local size</span>
+                            <span className="text-right">Server size</span>
+                            <span className="text-center">Action</span>
+                            <span className="text-center">Toggle</span>
+                          </div>
+                          <div className="divide-y divide-orange-200/40 dark:divide-orange-800/30">
+                            {conflictFiles.map((f) => {
+                              const willOverwrite = overwriteSet.has(f.relativePath)
+                              const serverSize = serverSizeByPath[f.relativePath] ?? 0
+                              const sizeDiffers = f.file.size !== serverSize
+                              return (
+                                <div key={f.relativePath} className="grid grid-cols-[1fr_80px_80px_90px_90px] items-center gap-2 px-4 py-1.5 text-xs">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <FileIcon className="size-3.5 shrink-0 text-orange-400" />
+                                    <span className="min-w-0 truncate text-orange-700 dark:text-orange-300" title={f.relativePath}>
+                                      {f.relativePath}
+                                    </span>
+                                    {sizeDiffers && (
+                                      <span className="shrink-0 rounded-full bg-orange-200 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 dark:bg-orange-900/50 dark:text-orange-400">Δ size</span>
+                                    )}
+                                  </div>
+                                  <span className="text-right tabular-nums text-muted-foreground">{formatBytes(f.file.size)}</span>
+                                  <span className={`text-right tabular-nums ${sizeDiffers ? "text-orange-600 font-medium dark:text-orange-400" : "text-muted-foreground"}`}>{formatBytes(serverSize)}</span>
+                                  {/* Action label */}
+                                  <div className="flex justify-center">
+                                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                      willOverwrite
+                                        ? "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400"
+                                        : "bg-muted text-muted-foreground/60"
+                                    }`}>
+                                      {willOverwrite ? "Replace existing" : "Skip"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-center">
+                                    <Button
+                                      size="sm"
+                                      variant={willOverwrite ? "default" : "outline"}
+                                      className={`h-6 px-2 text-[11px] ${willOverwrite ? "bg-orange-600 hover:bg-orange-700 text-white border-orange-600" : "border-border text-muted-foreground hover:bg-muted"}`}
+                                      onClick={() => {
+                                        setOverwriteSet((prev) => {
+                                          const next = new Set(prev)
+                                          if (next.has(f.relativePath)) next.delete(f.relativePath)
+                                          else next.add(f.relativePath)
+                                          return next
+                                        })
+                                      }}
+                                    >
+                                      {willOverwrite ? "Undo" : "Overwrite"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                    )}
+
                     {/* Overall progress bar */}
                     {uploadProgress.state !== "idle" && (
                       <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/80 px-4 py-3">
@@ -776,23 +901,28 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                       <div className="space-y-0.5">
                         {selectedFiles.map((entry) => {
                           const supported = isSupported(entry.relativePath)
+                          const isConflict = existingPathSet.has(entry.relativePath) && supported
+                          const willOverwrite = overwriteSet.has(entry.relativePath)
+                          const willSkip = isConflict && !willOverwrite
                           const fp = uploadProgress.files[entry.relativePath]
                           const pct = fp ? Math.round(fp.progress * 100) : 0
                           const isDone = fp && fp.uploadedChunks === fp.totalChunks && fp.totalChunks > 0
                           return (
                             <div
                               key={entry.relativePath}
-                              className={`group flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-muted/30 ${!supported ? "opacity-60" : ""}`}
+                              className={`group flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-muted/30 ${!supported || willSkip ? "opacity-60" : ""}`}
                             >
                               {!supported ? (
                                 <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
                               ) : isDone ? (
                                 <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                              ) : isConflict ? (
+                                <AlertTriangle className="size-3.5 shrink-0 text-orange-400" />
                               ) : (
                                 <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
                               )}
                               <span
-                                className={`min-w-0 flex-1 truncate ${!supported ? "text-amber-600 line-through decoration-amber-400/60" : "text-muted-foreground"}`}
+                                className={`min-w-0 flex-1 truncate ${!supported ? "text-amber-600 line-through decoration-amber-400/60" : willSkip ? "text-muted-foreground/50 line-through" : "text-muted-foreground"}`}
                                 title={entry.relativePath}
                               >
                                 {entry.relativePath}
@@ -802,6 +932,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                               </span>
                               {!supported ? (
                                 <span className="shrink-0 text-amber-500">skipped</span>
+                              ) : willSkip && uploadProgress.state === "idle" ? (
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground/60">skip</span>
                               ) : fp && uploadProgress.state !== "idle" && !isDone ? (
                                 <span className="w-8 shrink-0 text-right tabular-nums text-muted-foreground/70">
                                   {pct}%
@@ -822,11 +954,14 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                         </p>
                       </div>
                     )}
+                        </>
+                      )
+                    })()}
                   </div>
                 ) : null}
+                  </>
+                )}
 
-                {/* Processing pipeline status — shown after upload or when project has a job */}
-                <ProcessingStatusPanel dealId={dealId} />
               </div>
             ) : null}
             {section === "ai-insights" ? (
