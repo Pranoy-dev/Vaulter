@@ -18,7 +18,7 @@ def detect_duplicates(deal_id: str) -> int:
     sb = get_supabase()
     docs = (
         sb.table("documents")
-        .select("id, sha256_hash, filename, file_extension, storage_path")
+        .select("id, sha256_hash, filename, file_extension, storage_path, extracted_text")
         .eq("deal_id", deal_id)
         .execute()
     ).data
@@ -59,11 +59,19 @@ def detect_duplicates(deal_id: str) -> int:
     if len(remaining) < 2:
         return groups_created
 
-    # Extract text for remaining documents
+    # Extract text for remaining documents (prefer cached extracted_text from Gemini)
     texts: list[str] = []
     valid_docs: list[dict] = []
 
     for doc in remaining:
+        # Use cached extracted_text if available (from Gemini processing)
+        cached_text = doc.get("extracted_text")
+        if cached_text and len(cached_text) > 50:
+            texts.append(cached_text)
+            valid_docs.append(doc)
+            continue
+
+        # Fallback: download and extract locally
         ext = (doc.get("file_extension") or "").lstrip(".")
         if not ext or not doc.get("storage_path"):
             continue

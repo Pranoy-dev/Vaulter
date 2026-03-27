@@ -73,6 +73,7 @@ class ProcessingStatus(str, Enum):
 
 class ProcessingStage(str, Enum):
     indexing = "indexing"
+    document_processing = "document_processing"
     detecting_duplicates = "detecting_duplicates"
     linking_documents = "linking_documents"
     building_overview = "building_overview"
@@ -110,8 +111,11 @@ class DocumentResponse(BaseModel):
     file_extension: str | None
     file_type: str | None
     file_size: int
-    assigned_category: DocumentCategory
+    assigned_category: str | None
     classification_confidence: float
+    classification_reasoning: str | None = None
+    is_incomplete: bool = False
+    incompleteness_reasons: list[str] | None = None
     created_at: datetime
 
 

@@ -9,6 +9,7 @@ const POLL_INTERVAL_MS = 2500
 export type ProcessingStatus = "pending" | "running" | "completed" | "failed" | null
 export type ProcessingStage =
   | "indexing"
+  | "document_processing"
   | "detecting_duplicates"
   | "linking_documents"
   | "building_overview"
@@ -26,6 +27,7 @@ export interface ProcessingJobState {
 
 const STAGE_ORDER: Exclude<ProcessingStage, null | "done">[] = [
   "indexing",
+  "document_processing",
   "detecting_duplicates",
   "linking_documents",
   "building_overview",

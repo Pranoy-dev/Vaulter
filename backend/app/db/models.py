@@ -130,23 +130,48 @@ class Document(Base):
     file_size = Column(BigInteger, default=0)
     sha256_hash = Column(Text)
     storage_path = Column(Text)
-    assigned_category = Column(
-        Enum("leases_amendments", "financial", "technical_environmental", "corporate_legal", "other",
-             name="document_category", create_type=True),
-        server_default="other",
-    )
+    assigned_category = Column(Text, server_default="other")
     classification_confidence = Column(Float, default=0)
+    classification_reasoning = Column(Text, nullable=True)
+    extracted_text = Column(Text, nullable=True)
+    is_incomplete = Column(Boolean, nullable=False, default=False)
+    incompleteness_reasons = Column(JSONB, nullable=True)
     rag_indexed = Column(Boolean, nullable=False, default=False)
     rag_indexed_at = Column(DateTime(timezone=True), nullable=True)
     classified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     deal = relationship("Deal", back_populates="documents")
+    extraction_segments = relationship("ExtractionSegment", back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_documents_deal", "deal_id"),
         Index("idx_documents_hash", "sha256_hash"),
         Index("idx_documents_category", "deal_id", "assigned_category"),
+    )
+
+
+# ── EXTRACTION SEGMENTS (large PDF resumability) ─────────────────────────────
+
+class ExtractionSegment(Base):
+    __tablename__ = "extraction_segments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    segment_index = Column(Integer, nullable=False)
+    page_start = Column(Integer, nullable=False)
+    page_end = Column(Integer, nullable=False)
+    gemini_file_uri = Column(Text, nullable=True)
+    status = Column(Text, nullable=False, server_default="pending")
+    extracted_text = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    document = relationship("Document", back_populates="extraction_segments")
+
+    __table_args__ = (
+        Index("idx_extraction_segments_doc", "document_id"),
     )
 
 
@@ -243,7 +268,7 @@ class ProcessingJob(Base):
         server_default="pending",
     )
     current_stage = Column(
-        Enum("indexing", "detecting_duplicates", "linking_documents", "building_overview", "done",
+        Enum("indexing", "document_processing", "detecting_duplicates", "linking_documents", "building_overview", "done",
              name="processing_stage", create_type=True),
         server_default="indexing",
     )

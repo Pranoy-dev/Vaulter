@@ -21,6 +21,7 @@ import {
 import {
   ArrowLeft,
   AlertTriangle,
+  Building2,
   CheckCircle2,
   ChevronRight,
   Copy,
@@ -361,7 +362,7 @@ function ClassificationPanel({
     return (
       <EmptyState
         icon={LayoutGrid}
-        message="No classifications defined — they will appear once your company is set up."
+        message="No classification categories defined for your company — add categories before running the classification process."
       />
     )
 
@@ -405,7 +406,7 @@ function ClassificationPanel({
             variant={hasUnprocessed ? "default" : "outline"}
             className="h-8 gap-1.5 text-xs"
             onClick={handleProcess}
-            disabled={processing || documents.length === 0}
+            disabled={processing || documents.length === 0 || classifications.length === 0}
           >
             {processing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
             {processing ? "Processing…" : "Process"}
@@ -597,10 +598,11 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
 export type ProjectSetupScreenProps = {
   dealId: string | null
   projectTitle: string
+  hasCompany: boolean
   onBack: () => void
 }
 
-export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetupScreenProps) {
+export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }: ProjectSetupScreenProps) {
   const { getToken } = useAuth()
   const [section, setSection] = React.useState<SetupSection>("upload")
   const [chatOpen, setChatOpen] = React.useState(true)
@@ -845,6 +847,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                     <Loader2 className="size-5 animate-spin" />
                     <span>Loading files…</span>
                   </div>
+                ) : !hasCompany ? (
+                  <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 py-12 text-center">
+                    <Building2 className="size-8 text-muted-foreground/30" />
+                    <p className="text-sm text-muted-foreground">
+                      No company linked to your account — uploads are disabled until a company is set up.
+                    </p>
+                  </div>
                 ) : (
                   <>
                 {/* Existing files — shown when project already has files and dropzone is hidden */}
@@ -903,8 +912,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                             </div>
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="h-8 gap-1.5 text-xs"
+                              variant="default"
+                              className="h-8 gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white border-0"
                               onClick={resetUpload}
                             >
                               <Plus className="size-3.5" />
@@ -971,6 +980,15 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                                       ) : (
                                         <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
                                           Classification pending
+                                        </span>
+                                      )}
+                                      {/* Incompleteness badge */}
+                                      {doc.is_incomplete && (
+                                        <span
+                                          className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400"
+                                          title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
+                                        >
+                                          Incomplete
                                         </span>
                                       )}
                                     </div>

@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = ""
 
+    # Gemini
+    gemini_api_key: str = ""
+
     # Database
     database_url: str = ""
     direct_url: str = ""

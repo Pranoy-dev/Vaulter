@@ -19,14 +19,19 @@ const STAGES = [
     description: "Extracting and indexing text for RAG search",
   },
   {
+    key: "document_processing" as const,
+    label: "AI Document Processing",
+    description: "Extracting text, classifying, and checking completeness via Gemini",
+  },
+  {
     key: "detecting_duplicates" as const,
     label: "Duplicate Detection",
     description: "Finding exact and near-duplicate files",
   },
   {
     key: "linking_documents" as const,
-    label: "Classification & Lease Linking",
-    description: "Categorising documents and building lease chains",
+    label: "Lease Linking",
+    description: "Building lease amendment chains",
   },
   {
     key: "building_overview" as const,

@@ -143,7 +143,7 @@ export default function Page() {
   }
 
   // Sync user to backend DB on first sign-in
-  useUserSync()
+  const { hasCompany } = useUserSync()
 
   return (
     <SidebarProvider className="h-full">
@@ -163,6 +163,7 @@ export default function Page() {
             <ProjectSetupScreen
               dealId={selectedDealId}
               projectTitle={setupProjectTitle}
+              hasCompany={hasCompany}
               onBack={() => {
                 goHome()
                 setSidebarRefreshKey((k) => k + 1)

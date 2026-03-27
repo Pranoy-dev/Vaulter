@@ -17,6 +17,9 @@ export interface DealDocument {
   file_size: number
   assigned_category: string
   classification_confidence: number
+  classification_reasoning: string | null
+  is_incomplete: boolean
+  incompleteness_reasons: string[] | null
   rag_indexed: boolean
   rag_indexed_at: string | null
   classified_at: string | null

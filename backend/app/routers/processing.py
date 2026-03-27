@@ -56,19 +56,20 @@ async def _run_pipeline(deal_id: str):
         await asyncio.sleep(0.5)  # Small pause for UX
         _update_job(deal_id, progress=0.10)
 
-        # Stage 2: Duplicate Detection
-        _update_job(deal_id, stage="detecting_duplicates", progress=0.15)
+        # Stage 2: Document Processing (Gemini extraction + classification + completeness)
+        _update_job(deal_id, stage="document_processing", progress=0.12)
+        from app.services.gemini_processor import process_deal_documents
+        await asyncio.to_thread(process_deal_documents, deal_id)
+        _update_job(deal_id, progress=0.50)
+
+        # Stage 3: Duplicate Detection
+        _update_job(deal_id, stage="detecting_duplicates", progress=0.52)
         from app.services.duplicate_detection import detect_duplicates
         await asyncio.to_thread(detect_duplicates, deal_id)
-        _update_job(deal_id, progress=0.40)
-
-        # Stage 3: Document Classification (run before lease linking — it sets categories)
-        _update_job(deal_id, stage="linking_documents", progress=0.45)
-        from app.services.document_classifier import classify_documents
-        await asyncio.to_thread(classify_documents, deal_id)
-        _update_job(deal_id, progress=0.65)
+        _update_job(deal_id, progress=0.70)
 
         # Stage 4: Lease & Amendment Linking
+        _update_job(deal_id, stage="linking_documents", progress=0.72)
         from app.services.lease_linker import link_leases
         await asyncio.to_thread(link_leases, deal_id)
         _update_job(deal_id, progress=0.85)
