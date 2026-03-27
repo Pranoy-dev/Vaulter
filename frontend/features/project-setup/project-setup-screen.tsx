@@ -48,6 +48,7 @@ import { useDealData } from "@/hooks/use-deal-data"
 import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-data"
 import { useClassifications } from "@/hooks/use-classifications"
 import type { Classification } from "@/hooks/use-classifications"
+import { useProcessingStatus } from "@/hooks/use-processing-status"
 
 export type SetupSection =
   | "upload"
@@ -182,7 +183,7 @@ function buildTree(documents: DealDocument[]): TreeNode {
   return root
 }
 
-function TreeNodeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
+function TreeNodeRow({ node, depth = 0, showStatus = false }: { node: TreeNode; depth?: number; showStatus?: boolean }) {
   const [open, setOpen] = React.useState(true)
   const hasChildren = Object.keys(node.children).length > 0
   const indent = depth * 16
@@ -212,7 +213,7 @@ function TreeNodeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
         {Object.values(node.children)
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((child) => (
-            <TreeNodeRow key={child.path} node={child} depth={depth + 1} />
+            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} />
           ))}
         {/* Files in this folder */}
         {node.files.map((doc) => (
@@ -221,9 +222,37 @@ function TreeNodeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
             className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30"
             style={{ paddingLeft: `${8 + indent + 20}px` }}
           >
-            <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />
+            {showStatus && doc.processing_status === "processing"
+              ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+              : showStatus && doc.classification_confidence > 0
+                ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
+                : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
             <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
             <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+            {showStatus && (
+              <>
+                {doc.processing_status === "processing" ? (
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
+                ) : doc.processing_status === "failed" ? (
+                  <span
+                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                    title={doc.processing_error ?? "Processing failed"}
+                  >Failed</span>
+                ) : doc.classification_confidence > 0 ? (
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
+                    {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                )}
+                {doc.is_incomplete && (
+                  <span
+                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                    title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
+                  >Incomplete</span>
+                )}
+              </>
+            )}
           </div>
         ))}
       </CollapsibleContent>
@@ -231,7 +260,7 @@ function TreeNodeRow({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
   )
 }
 
-function FileStructurePanel({ documents, loading }: { documents: DealDocument[]; loading: boolean }) {
+function FileStructurePanel({ documents, loading, showStatus = false }: { documents: DealDocument[]; loading: boolean; showStatus?: boolean }) {
   if (loading) return <LoadingRows />
   if (documents.length === 0)
     return <EmptyState icon={FolderTree} message="No files yet — upload to see folder structure." />
@@ -245,7 +274,7 @@ function FileStructurePanel({ documents, loading }: { documents: DealDocument[];
     <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
       <div className="divide-y divide-border/20">
         {topLevel.map((node) => (
-          <TreeNodeRow key={node.path} node={node} depth={0} />
+          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} />
         ))}
         {rootFiles.map((doc) => (
           <div key={doc.id} className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30">
@@ -327,12 +356,18 @@ function ClassificationPanel({
   loading,
   dealId,
   onProcessed,
+  isDocProcessing,
+  countdown,
+  needsRefresh,
 }: {
   classifications: Classification[]
   documents: DealDocument[]
   loading: boolean
   dealId: string | null
   onProcessed: () => void
+  isDocProcessing: boolean
+  countdown: number
+  needsRefresh: boolean
 }) {
   const { getToken } = useAuth()
   const [processing, setProcessing] = React.useState(false)
@@ -348,7 +383,7 @@ function ClassificationPanel({
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       })
-      toast.success("Processing started", { description: "Classification will run in the background." })
+      toast.success("Processing started", { description: "Per-file progress is visible in the file list below." })
       onProcessed()
     } catch {
       toast.error("Failed to start processing")
@@ -393,24 +428,56 @@ function ClassificationPanel({
     <div className="space-y-3">
       {/* Action bar */}
       {dealId && (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">
-            {documents.length === 0
-              ? "Upload files to classify them."
-              : classifiedDocs.length === documents.length
-                ? `All ${documents.length} files classified.`
-                : `${classifiedDocs.length} of ${documents.length} files classified.`}
-          </p>
-          <Button
-            size="sm"
-            variant={hasUnprocessed ? "default" : "outline"}
-            className="h-8 gap-1.5 text-xs"
-            onClick={handleProcess}
-            disabled={processing || documents.length === 0 || classifications.length === 0}
-          >
-            {processing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            {processing ? "Processing…" : "Process"}
-          </Button>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">
+                {documents.length === 0
+                  ? "Upload files to classify them."
+                  : classifiedDocs.length === documents.length
+                    ? `All ${documents.length} files classified.`
+                    : `${classifiedDocs.length} of ${documents.length} files classified.`}
+              </p>
+              {needsRefresh && !isDocProcessing && (
+                <span className="flex items-center gap-1 text-[11px] text-muted-foreground/50">
+                  <RotateCcw className="size-2.5 text-muted-foreground/40" />
+                  {countdown}s
+                </span>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant={hasUnprocessed ? "default" : "outline"}
+              className="h-8 gap-1.5 text-xs"
+              onClick={handleProcess}
+              disabled={processing || isDocProcessing || documents.length === 0 || classifications.length === 0}
+            >
+              {processing || isDocProcessing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+              {processing ? "Starting…" : isDocProcessing ? "Processing…" : "Process"}
+            </Button>
+          </div>
+          {/* Per-file processing progress bar */}
+          {isDocProcessing && (() => {
+            const processingCount = documents.filter((d) => d.processing_status === "processing").length
+            const processedCount = documents.filter((d) => d.processing_status === "completed" || d.processing_status === "failed").length
+            const processPct = documents.length > 0 ? Math.round((processedCount / documents.length) * 100) : 0
+            return (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Loader2 className="size-3 animate-spin text-primary" />
+                    <span className="text-[11px] font-medium text-primary">
+                      AI Processing{processingCount > 0 ? ` — ${processingCount} file${processingCount !== 1 ? "s" : ""} in progress` : "…"}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-semibold tabular-nums text-primary">
+                    {processedCount}/{documents.length} ({processPct}%)
+                  </span>
+                </div>
+                <Progress value={processPct} className="h-1.5" />
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -535,7 +602,7 @@ function ClassificationPanel({
           {filteredDocs.length === 0 ? (
             <EmptyState icon={FolderTree} message="No files in this category yet." />
           ) : (
-            <FileStructurePanel documents={filteredDocs} loading={false} />
+            <FileStructurePanel documents={filteredDocs} loading={false} showStatus />
           )}
         </div>
       )}
@@ -612,6 +679,38 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
   // ── Real deal data ────────────────────────────────────────────────────────
   const dealData = useDealData(dealId)
   const { classifications, loading: classificationsLoading } = useClassifications()
+  const processingJob = useProcessingStatus(dealId)
+
+  // ── Auto-refresh countdown ────────────────────────────────────────────────
+  const [refreshCountdown, setRefreshCountdown] = React.useState(5)
+  const hasDocsNeedingWork =
+    dealData.documents.length > 0 &&
+    dealData.documents.some(
+      (d) => !d.rag_indexed || d.processing_status === "pending" || d.processing_status === "processing",
+    )
+  // Only tick when the relevant tab is active
+  const tabNeedsRefresh =
+    hasDocsNeedingWork &&
+    (section === "upload" || section === "file-structure")
+  // Keep a stable ref to silentRefresh so the interval closure never goes stale
+  const silentRefreshRef = React.useRef(dealData.silentRefresh)
+  React.useEffect(() => { silentRefreshRef.current = dealData.silentRefresh }, [dealData.silentRefresh])
+  React.useEffect(() => {
+    if (!tabNeedsRefresh) {
+      setRefreshCountdown(5)
+      return
+    }
+    const timer = setInterval(() => {
+      setRefreshCountdown((prev) => {
+        if (prev <= 1) {
+          silentRefreshRef.current()
+          return 5
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [hasDocsNeedingWork])
 
   const startDrag = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -901,13 +1000,30 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                       const ragPct = docs.length > 0 ? Math.round((ragCount / docs.length) * 100) : 0
                       const classPct = docs.length > 0 ? Math.round((classifiedCount / docs.length) * 100) : 0
 
+                      // Processing counts
+                      const processingCount = docs.filter((d) => d.processing_status === "processing").length
+                      const processedCount = docs.filter((d) => d.processing_status === "completed" || d.processing_status === "failed").length
+                      const isDocProcessing = processingJob.status === "running" && processingJob.currentStage === "document_processing"
+                      const processPct = docs.length > 0 ? Math.round((processedCount / docs.length) * 100) : 0
+
                       return (
                         <div className="rounded-xl border border-border/70 bg-background/60 overflow-hidden">
                           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/50">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium">{docs.length} file{docs.length !== 1 ? "s" : ""} uploaded</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatBytes(docs.reduce((s, d) => s + d.file_size, 0))} total
+                              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                                {(() => {
+                                  const classifiedCount = docs.filter((d) => d.classification_confidence > 0).length
+                                  if (classifiedCount === docs.length) return `All ${docs.length} classified`
+                                  return `${classifiedCount} of ${docs.length} classified`
+                                })()}
+                                {tabNeedsRefresh && (
+                                  <>
+                                    <span className="text-muted-foreground/30">·</span>
+                                    <RotateCcw className="size-2.5 text-muted-foreground/40" />
+                                    <span>{refreshCountdown}s</span>
+                                  </>
+                                )}
                               </p>
                             </div>
                             <Button
@@ -920,6 +1036,23 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                               Upload More
                             </Button>
                           </div>
+                          {/* AI Processing progress — shown while document_processing stage is active */}
+                          {isDocProcessing && (
+                            <div className="px-4 py-2.5 border-b border-border/40 bg-primary/5">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <Loader2 className="size-3 animate-spin text-primary" />
+                                  <span className="text-[11px] font-medium text-primary">
+                                    AI Processing{processingCount > 0 ? ` — ${processingCount} file${processingCount !== 1 ? "s" : ""} in progress` : "…"}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-semibold tabular-nums text-primary">
+                                  {processedCount}/{docs.length} ({processPct}%)
+                                </span>
+                              </div>
+                              <Progress value={processPct} className="h-1.5" />
+                            </div>
+                          )}
                           {/* RAG & Classification summary bars */}
                           <div className="grid grid-cols-2 gap-2 px-4 py-2.5 border-b border-border/40">
                             <div className="space-y-1">
@@ -941,7 +1074,16 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                               <Progress value={classPct} className="h-1" />
                             </div>
                           </div>
-                          {/* File rows — first 10 always visible, rest scrollable */}
+                          {/* Table header */}
+                          <div className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem] items-center gap-x-2 border-b border-border/40 bg-muted/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                            <span />
+                            <span>File</span>
+                            <span className="text-right">Size</span>
+                            <span className="text-center">RAG</span>
+                            <span className="text-center">Classification</span>
+                            <span className="text-center">Status</span>
+                          </div>
+                          {/* File rows */}
                           <div className={docs.length > 10 ? "max-h-[320px] overflow-y-auto" : ""}>
                             <div className="divide-y divide-border/30">
                               {dealData.loading ? (
@@ -953,44 +1095,74 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                                   const classified = doc.classification_confidence > 0
                                   const ragged = doc.rag_indexed
                                   return (
-                                    <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/20">
-                                      {ragged && classified
-                                        ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
-                                        : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
-                                      }
-                                      <span className="min-w-0 flex-1 truncate text-muted-foreground" title={doc.original_path}>
+                                    <div key={doc.id} className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem] items-center gap-x-2 px-3 py-1.5 text-xs hover:bg-muted/20">
+                                      {/* Icon */}
+                                      <div className="flex items-center justify-center">
+                                        {doc.processing_status === "processing"
+                                          ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
+                                          : ragged && classified
+                                            ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                                            : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
+                                        }
+                                      </div>
+                                      {/* File path */}
+                                      <span className="min-w-0 truncate text-muted-foreground" title={doc.original_path}>
                                         {doc.original_path}
                                       </span>
-                                      <span className="shrink-0 tabular-nums text-muted-foreground/50">
+                                      {/* Size */}
+                                      <span className="text-right tabular-nums text-muted-foreground/50">
                                         {formatBytes(doc.file_size)}
                                       </span>
-                                      {/* RAG status */}
-                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                        ragged
-                                          ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                                          : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-                                      }`}>
-                                        {ragged ? "RAG ✓" : "RAG pending"}
-                                      </span>
-                                      {/* Classification status */}
-                                      {classified ? (
-                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
-                                          {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                                      {/* RAG */}
+                                      <div className="flex justify-center">
+                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                          ragged
+                                            ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                                            : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                                        }`}>
+                                          {ragged ? "✓ Indexed" : "Pending"}
                                         </span>
-                                      ) : (
-                                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
-                                          Classification pending
-                                        </span>
-                                      )}
-                                      {/* Incompleteness badge */}
-                                      {doc.is_incomplete && (
-                                        <span
-                                          className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400"
-                                          title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
-                                        >
-                                          Incomplete
-                                        </span>
-                                      )}
+                                      </div>
+                                      {/* Classification */}
+                                      <div className="flex justify-center">
+                                        {doc.processing_status === "processing" ? (
+                                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                                            Analyzing…
+                                          </span>
+                                        ) : doc.processing_status === "failed" ? (
+                                          <span
+                                            className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                                            title={doc.processing_error ?? "Processing failed"}
+                                          >
+                                            Failed
+                                          </span>
+                                        ) : classified ? (
+                                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
+                                            {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                                          </span>
+                                        ) : (
+                                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                            Pending
+                                          </span>
+                                        )}
+                                      </div>
+                                      {/* Status / Incomplete */}
+                                      <div className="flex justify-center">
+                                        {doc.is_incomplete ? (
+                                          <span
+                                            className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                                            title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
+                                          >
+                                            Incomplete
+                                          </span>
+                                        ) : classified && ragged ? (
+                                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400">
+                                            Done
+                                          </span>
+                                        ) : (
+                                          <span className="text-[11px] text-muted-foreground/30">—</span>
+                                        )}
+                                      </div>
                                     </div>
                                   )
                                 })
@@ -1355,6 +1527,12 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     loading={classificationsLoading}
                     dealId={dealId}
                     onProcessed={dealData.refresh}
+                    isDocProcessing={
+                      processingJob.status === "running" &&
+                      processingJob.currentStage === "document_processing"
+                    }
+                    countdown={refreshCountdown}
+                    needsRefresh={tabNeedsRefresh}
                   />
                 </div>
               )

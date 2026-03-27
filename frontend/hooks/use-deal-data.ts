@@ -20,6 +20,8 @@ export interface DealDocument {
   classification_reasoning: string | null
   is_incomplete: boolean
   incompleteness_reasons: string[] | null
+  processing_status: "pending" | "processing" | "completed" | "failed"
+  processing_error: string | null
   rag_indexed: boolean
   rag_indexed_at: string | null
   classified_at: string | null
@@ -64,8 +66,10 @@ export interface DealData {
   leaseChains: LeaseChain[]
   skippedFiles: string[]
   loading: boolean
-  /** refetch all data */
+  /** refetch all data, shows loading spinner */
   refresh: () => void
+  /** refetch silently — no loading spinner, data updates in place */
+  silentRefresh: () => void
 }
 
 async function authedGet<T>(
@@ -90,11 +94,13 @@ export function useDealData(dealId: string | null): DealData {
   const [skippedFiles, setSkippedFiles] = React.useState<string[]>([])
   const [loading, setLoading] = React.useState(false)
   const [tick, setTick] = React.useState(0)
+  const silentRef = React.useRef(false)
 
   React.useEffect(() => {
     if (!dealId) return
     let cancelled = false
-    setLoading(true)
+    if (!silentRef.current) setLoading(true)
+    silentRef.current = false
     Promise.all([
       authedGet<{ documents: DealDocument[]; total: number }>(
         `/api/deals/${dealId}/documents`,
@@ -123,7 +129,15 @@ export function useDealData(dealId: string | null): DealData {
     return () => { cancelled = true }
   }, [dealId, getToken, tick])
 
-  const refresh = React.useCallback(() => setTick((t) => t + 1), [])
+  const refresh = React.useCallback(() => {
+    silentRef.current = false
+    setTick((t) => t + 1)
+  }, [])
 
-  return { documents, duplicates, leaseChains, skippedFiles, loading, refresh }
+  const silentRefresh = React.useCallback(() => {
+    silentRef.current = true
+    setTick((t) => t + 1)
+  }, [])
+
+  return { documents, duplicates, leaseChains, skippedFiles, loading, refresh, silentRefresh }
 }

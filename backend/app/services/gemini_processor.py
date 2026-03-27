@@ -511,13 +511,23 @@ def process_deal_documents(deal_id: str) -> int:
     for doc in docs:
         # Skip if already processed (has extracted_text and classification)
         if doc.get("extracted_text"):
+            # Mark as completed if not already
+            if doc.get("processing_status") != "completed":
+                sb.table("documents").update({"processing_status": "completed"}).eq("id", doc["id"]).execute()
             processed += 1
             continue
+
+        # Mark as processing before starting Gemini call
+        sb.table("documents").update({"processing_status": "processing"}).eq("id", doc["id"]).execute()
 
         result = process_document(doc, categories)
 
         if result.error:
             logger.error("Failed to process document %s: %s", doc["id"], result.error)
+            sb.table("documents").update({
+                "processing_status": "failed",
+                "processing_error": str(result.error),
+            }).eq("id", doc["id"]).execute()
             continue
 
         # Update the document row
@@ -528,6 +538,7 @@ def process_deal_documents(deal_id: str) -> int:
             "classification_reasoning": result.classification_reasoning or None,
             "is_incomplete": result.is_incomplete,
             "incompleteness_reasons": result.incompleteness_reasons or None,
+            "processing_status": "completed",
             "classified_at": datetime.now(timezone.utc).isoformat(),
         }
         sb.table("documents").update(update_data).eq("id", doc["id"]).execute()
