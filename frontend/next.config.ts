@@ -17,6 +17,23 @@ const nextConfig: NextConfig = {
         source: "/api/deals/:path*",
         destination: `${BACKEND_ORIGIN}/api/deals/:path*`,
       },
+      {
+        // Proxy classifications API
+        source: "/api/classifications/:path*",
+        destination: `${BACKEND_ORIGIN}/api/classifications/:path*`,
+      },
+      {
+        source: "/api/classifications",
+        destination: `${BACKEND_ORIGIN}/api/classifications`,
+      },
+      {
+        source: "/api/webhooks/:path*",
+        destination: `${BACKEND_ORIGIN}/api/webhooks/:path*`,
+      },
+      {
+        source: "/api/health",
+        destination: `${BACKEND_ORIGIN}/api/health`,
+      },
     ]
   },
 };

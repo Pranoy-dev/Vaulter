@@ -28,13 +28,31 @@ def _resolve_company_id(clerk_user_id: str) -> uuid.UUID:
 
 @router.get("")
 async def list_classifications(clerk_user_id: str = Depends(get_current_user_id)):
-    """List all classifications for the user's company."""
+    """List all classifications for the user's company.
+
+    If the user has no company yet (pre-migration user), backfills it inline
+    so classifications are always returned on the first call.
+    """
     sb = get_supabase()
-    user_row = sb.table("users").select("company_id").eq("clerk_user_id", clerk_user_id).execute()
-    if not user_row.data or not user_row.data[0].get("company_id"):
-        # Company not yet created (will be backfilled on next auth cycle)
+    user_row = sb.table("users").select("id, company_id").eq("clerk_user_id", clerk_user_id).execute()
+    if not user_row.data:
         return ApiResponse.ok({"classifications": []})
-    company_id = user_row.data[0]["company_id"]
+
+    user = user_row.data[0]
+    company_id = user.get("company_id")
+
+    if not company_id:
+        # Backfill company inline — runs for users created before the company feature
+        from app.auth import _backfill_company
+        await _backfill_company(clerk_user_id, user["id"])
+        # Re-read the now-populated company_id
+        refreshed = sb.table("users").select("company_id").eq("clerk_user_id", clerk_user_id).execute()
+        if refreshed.data:
+            company_id = refreshed.data[0].get("company_id")
+
+    if not company_id:
+        return ApiResponse.ok({"classifications": []})
+
     result = (
         sb.table("company_classifications")
         .select("*")

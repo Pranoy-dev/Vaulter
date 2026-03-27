@@ -324,11 +324,38 @@ function ClassificationPanel({
   classifications,
   documents,
   loading,
+  dealId,
+  onProcessed,
 }: {
   classifications: Classification[]
   documents: DealDocument[]
   loading: boolean
+  dealId: string | null
+  onProcessed: () => void
 }) {
+  const { getToken } = useAuth()
+  const [processing, setProcessing] = React.useState(false)
+  // null = show all; "unclassified" = unclassified filter; any clf.key = that category
+  const [selectedFilter, setSelectedFilter] = React.useState<string | null>(null)
+
+  const handleProcess = React.useCallback(async () => {
+    if (!dealId) return
+    setProcessing(true)
+    try {
+      const token = await getToken()
+      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/process`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      toast.success("Processing started", { description: "Classification will run in the background." })
+      onProcessed()
+    } catch {
+      toast.error("Failed to start processing")
+    } finally {
+      setProcessing(false)
+    }
+  }, [dealId, getToken, onProcessed])
+
   if (loading) return <LoadingRows />
   if (classifications.length === 0)
     return (
@@ -338,70 +365,179 @@ function ClassificationPanel({
       />
     )
 
-  // Count files per classification key
-  const countByKey = documents.reduce<Record<string, number>>((acc, d) => {
+  // Only count documents that have actually been classified (confidence > 0)
+  const classifiedDocs = documents.filter((d) => d.classification_confidence > 0)
+  const unclassifiedDocs = documents.filter((d) => d.classification_confidence <= 0)
+  const unclassifiedCount = unclassifiedDocs.length
+
+  const countByKey = classifiedDocs.reduce<Record<string, number>>((acc, d) => {
     acc[d.assigned_category] = (acc[d.assigned_category] ?? 0) + 1
     return acc
   }, {})
 
   const active = classifications.filter((c) => c.is_active)
+  const hasUnprocessed = documents.length > 0 && unclassifiedCount > 0
+
+  // Filtered docs for the tree
+  const filteredDocs = selectedFilter === null
+    ? documents
+    : selectedFilter === "unclassified"
+      ? unclassifiedDocs
+      : classifiedDocs.filter((d) => d.assigned_category === selectedFilter)
+
+  const toggleFilter = (key: string) =>
+    setSelectedFilter((prev) => (prev === key ? null : key))
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {active.map((clf) => {
-        const count = countByKey[clf.key] ?? 0
-        const colorClass = CATEGORY_COLORS[clf.key] ?? CATEGORY_COLORS.other
-        const emoji = CATEGORY_ICONS[clf.key] ?? "📁"
-        return (
-          <div
-            key={clf.id}
-            className="flex flex-col gap-2 rounded-xl border border-border/70 bg-background/80 px-4 py-3.5 transition-shadow hover:shadow-sm"
+    <div className="space-y-3">
+      {/* Action bar */}
+      {dealId && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {documents.length === 0
+              ? "Upload files to classify them."
+              : classifiedDocs.length === documents.length
+                ? `All ${documents.length} files classified.`
+                : `${classifiedDocs.length} of ${documents.length} files classified.`}
+          </p>
+          <Button
+            size="sm"
+            variant={hasUnprocessed ? "default" : "outline"}
+            className="h-8 gap-1.5 text-xs"
+            onClick={handleProcess}
+            disabled={processing || documents.length === 0}
           >
-            {/* Header row */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-base leading-none" aria-hidden>
-                  {emoji}
-                </span>
-                <span className="text-sm font-semibold leading-tight">{clf.label}</span>
-              </div>
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+            {processing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+            {processing ? "Processing…" : "Process"}
+          </Button>
+        </div>
+      )}
+
+      {/* Classification cards grid */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {active.map((clf) => {
+          const count = countByKey[clf.key] ?? 0
+          const colorClass = CATEGORY_COLORS[clf.key] ?? CATEGORY_COLORS.other
+          const emoji = CATEGORY_ICONS[clf.key] ?? "📁"
+          const pct = documents.length > 0 ? Math.round((count / documents.length) * 100) : 0
+          const isSelected = selectedFilter === clf.key
+          return (
+            <button
+              key={clf.id}
+              type="button"
+              onClick={() => toggleFilter(clf.key)}
+              className={`text-left flex flex-col gap-2 rounded-xl border px-4 py-3.5 transition-all ${
+                isSelected
+                  ? "border-primary/50 bg-primary/[0.04] shadow-sm ring-1 ring-primary/20"
+                  : "border-border/70 bg-background/80 hover:shadow-sm hover:border-border"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base leading-none" aria-hidden>{emoji}</span>
+                  <span className="text-sm font-semibold leading-tight">{clf.label}</span>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
                   count > 0 ? colorClass : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
-                }`}
-              >
-                {count} {count === 1 ? "file" : "files"}
-              </span>
-            </div>
-            {/* Description */}
-            {clf.description && (
-              <p className="text-xs leading-relaxed text-muted-foreground">{clf.description}</p>
-            )}
-            {/* Progress bar — proportion of total classified docs */}
-            {documents.length > 0 && (
+                }`}>
+                  {count} {count === 1 ? "file" : "files"}
+                </span>
+              </div>
+              {clf.description && (
+                <p className="text-xs leading-relaxed text-muted-foreground">{clf.description}</p>
+              )}
+              {documents.length > 0 && (
+                <div className="space-y-1">
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        count > 0 ? (CATEGORY_BAR_COLORS[clf.key] ?? "bg-zinc-400") : "bg-zinc-200 dark:bg-zinc-700"
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/60 tabular-nums">{pct}% of documents</p>
+                </div>
+              )}
+            </button>
+          )
+        })}
+
+        {/* Unclassified card — always shown when there are documents */}
+        {documents.length > 0 && (() => {
+          const isSelected = selectedFilter === "unclassified"
+          return (
+            <button
+              type="button"
+              onClick={() => toggleFilter("unclassified")}
+              className={`text-left flex flex-col gap-2 rounded-xl border border-dashed px-4 py-3.5 transition-all ${
+                isSelected
+                  ? "border-amber-400/60 bg-amber-50/40 shadow-sm ring-1 ring-amber-300/30 dark:bg-amber-950/20"
+                  : "border-border/60 bg-muted/20 hover:border-border"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base leading-none" aria-hidden>❓</span>
+                  <span className="text-sm font-semibold leading-tight text-muted-foreground">Unclassified</span>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                  unclassifiedCount > 0
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                }`}>
+                  {unclassifiedCount} {unclassifiedCount === 1 ? "file" : "files"}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Files not yet processed or below confidence threshold.
+              </p>
               <div className="space-y-1">
                 <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      count > 0
-                        ? (CATEGORY_BAR_COLORS[clf.key] ?? "bg-zinc-400")
-                        : "bg-zinc-200 dark:bg-zinc-700"
+                      unclassifiedCount > 0 ? "bg-amber-300" : "bg-zinc-200 dark:bg-zinc-700"
                     }`}
-                    style={{
-                      width: `${documents.length > 0 ? Math.round((count / documents.length) * 100) : 0}%`,
-                    }}
+                    style={{ width: `${Math.round((unclassifiedCount / documents.length) * 100)}%` }}
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground/60 tabular-nums">
-                  {documents.length > 0
-                    ? `${Math.round((count / documents.length) * 100)}% of documents`
-                    : "No documents uploaded yet"}
+                  {Math.round((unclassifiedCount / documents.length) * 100)}% of documents
                 </p>
               </div>
+            </button>
+          )
+        })()}
+      </div>
+
+      {/* File tree below cards — filtered by selected card */}
+      {documents.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              {selectedFilter === null
+                ? "All files"
+                : selectedFilter === "unclassified"
+                  ? "Unclassified files"
+                  : `${active.find((c) => c.key === selectedFilter)?.label ?? selectedFilter} files`}
+            </p>
+            {selectedFilter !== null && (
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2"
+                onClick={() => setSelectedFilter(null)}
+              >
+                Show all
+              </button>
             )}
           </div>
-        )
-      })}
+          {filteredDocs.length === 0 ? (
+            <EmptyState icon={FolderTree} message="No files in this category yet." />
+          ) : (
+            <FileStructurePanel documents={filteredDocs} loading={false} />
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -659,14 +795,6 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                 Upload
               </ToggleGroupItem>
               <ToggleGroupItem
-                value="ai-insights"
-                aria-label="AI insights"
-                className={sectionToggleItemClass}
-              >
-                <Sparkles aria-hidden />
-                AI Insights
-              </ToggleGroupItem>
-              <ToggleGroupItem
                 value="file-structure"
                 aria-label="Classification"
                 className={sectionToggleItemClass}
@@ -689,6 +817,14 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
               >
                 <FilePenLine aria-hidden />
                 Lease Amendment
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="ai-insights"
+                aria-label="AI insights"
+                className={sectionToggleItemClass}
+              >
+                <Sparkles aria-hidden />
+                AI Insights
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -1199,6 +1335,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, onBack }: ProjectSetu
                     classifications={classifications}
                     documents={dealData.documents}
                     loading={classificationsLoading}
+                    dealId={dealId}
+                    onProcessed={dealData.refresh}
                   />
                 </div>
               )
