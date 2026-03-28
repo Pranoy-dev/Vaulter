@@ -59,38 +59,53 @@ def _verify_deal_ownership(deal_id: uuid.UUID, user_id: uuid.UUID) -> dict:
 
 @router.post("", status_code=201)
 async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current_user_id)):
-    user_id = _resolve_user_id(clerk_user_id)
-    company_id = _resolve_company_id(clerk_user_id)
-    sb = get_supabase()
-    insert_data = {
-        "user_id": str(user_id),
-        "name": body.name,
-    }
-    if company_id:
-        insert_data["company_id"] = company_id
-    result = sb.table("deals").insert(insert_data).execute()
-    return ApiResponse.ok(result.data[0])
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        company_id = _resolve_company_id(clerk_user_id)
+        sb = get_supabase()
+        insert_data = {
+            "user_id": str(user_id),
+            "name": body.name,
+        }
+        if company_id:
+            insert_data["company_id"] = company_id
+        result = sb.table("deals").insert(insert_data).execute()
+        return ApiResponse.ok(result.data[0])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.get("")
 async def list_deals(clerk_user_id: str = Depends(get_current_user_id)):
-    user_id = _resolve_user_id(clerk_user_id)
-    sb = get_supabase()
-    result = (
-        sb.table("deals")
-        .select("*")
-        .eq("user_id", str(user_id))
-        .order("created_at", desc=True)
-        .execute()
-    )
-    return ApiResponse.ok({"deals": result.data})
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        sb = get_supabase()
+        result = (
+            sb.table("deals")
+            .select("*")
+            .eq("user_id", str(user_id))
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return ApiResponse.ok({"deals": result.data})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.get("/{deal_id}")
 async def get_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_current_user_id)):
-    user_id = _resolve_user_id(clerk_user_id)
-    deal = _verify_deal_ownership(deal_id, user_id)
-    return ApiResponse.ok(deal)
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        deal = _verify_deal_ownership(deal_id, user_id)
+        return ApiResponse.ok(deal)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── Documents (Phase 5) ─────────────────────────────────────────────────────
@@ -102,16 +117,21 @@ async def list_documents(
     search: str | None = None,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
-    query = sb.table("documents").select("*", count="exact").eq("deal_id", str(deal_id))
-    if category:
-        query = query.eq("assigned_category", category)
-    if search:
-        query = query.ilike("filename", f"%{search}%")
-    result = query.order("original_path").execute()
-    return ApiResponse.ok({"documents": result.data, "total": result.count or len(result.data)})
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
+        query = sb.table("documents").select("*", count="exact").eq("deal_id", str(deal_id))
+        if category:
+            query = query.eq("assigned_category", category)
+        if search:
+            query = query.ilike("filename", f"%{search}%")
+        result = query.order("original_path").execute()
+        return ApiResponse.ok({"documents": result.data, "total": result.count or len(result.data)})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.get("/{deal_id}/documents/{doc_id}/download")
@@ -120,14 +140,19 @@ async def download_document(
     doc_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
-    doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).execute()
-    if not doc.data or not doc.data[0].get("storage_path"):
-        raise HTTPException(status_code=404, detail="Document not found")
-    signed = sb.storage.from_("dataroom-files").create_signed_url(doc.data[0]["storage_path"], 3600)
-    return ApiResponse.ok({"url": signed.get("signedURL") or signed.get("signedUrl")})
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
+        doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).execute()
+        if not doc.data or not doc.data[0].get("storage_path"):
+            raise HTTPException(status_code=404, detail="Document not found")
+        signed = sb.storage.from_("dataroom-files").create_signed_url(doc.data[0]["storage_path"], 3600)
+        return ApiResponse.ok({"url": signed.get("signedURL") or signed.get("signedUrl")})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── Duplicates (Phase 5) ────────────────────────────────────────────────────
@@ -137,44 +162,49 @@ async def list_duplicates(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
-    groups = (
-        sb.table("duplicate_groups")
-        .select("*")
-        .eq("deal_id", str(deal_id))
-        .execute()
-    )
-    result = []
-    for g in groups.data:
-        members = (
-            sb.table("duplicate_group_members")
-            .select("*, documents(filename, original_path, file_size)")
-            .eq("group_id", g["id"])
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
+        groups = (
+            sb.table("duplicate_groups")
+            .select("*")
+            .eq("deal_id", str(deal_id))
             .execute()
         )
-        member_list = []
-        for m in members.data:
-            doc_info = m.get("documents") or {}
-            member_list.append(DuplicateGroupMemberResponse(
-                id=m["id"],
-                document_id=m["document_id"],
-                is_canonical=m["is_canonical"],
-                filename=doc_info.get("filename"),
-                original_path=doc_info.get("original_path"),
-                file_size=doc_info.get("file_size"),
+        result = []
+        for g in groups.data:
+            members = (
+                sb.table("duplicate_group_members")
+                .select("*, documents(filename, original_path, file_size)")
+                .eq("group_id", g["id"])
+                .execute()
+            )
+            member_list = []
+            for m in members.data:
+                doc_info = m.get("documents") or {}
+                member_list.append(DuplicateGroupMemberResponse(
+                    id=m["id"],
+                    document_id=m["document_id"],
+                    is_canonical=m["is_canonical"],
+                    filename=doc_info.get("filename"),
+                    original_path=doc_info.get("original_path"),
+                    file_size=doc_info.get("file_size"),
+                ))
+            result.append(DuplicateGroupResponse(
+                id=g["id"],
+                group_name=g["group_name"],
+                match_type=g["match_type"],
+                members=member_list,
             ))
-        result.append(DuplicateGroupResponse(
-            id=g["id"],
-            group_name=g["group_name"],
-            match_type=g["match_type"],
-            members=member_list,
-        ))
-    # Sort by group size descending, exclude groups with fewer than 2 members
-    result = [g for g in result if len(g.members) >= 2]
-    result.sort(key=lambda g: len(g.members), reverse=True)
-    return ApiResponse.ok({"groups": result})
+        # Sort by group size descending, exclude groups with fewer than 2 members
+        result = [g for g in result if len(g.members) >= 2]
+        result.sort(key=lambda g: len(g.members), reverse=True)
+        return ApiResponse.ok({"groups": result})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── Lease Chains (Phase 5) ──────────────────────────────────────────────────
@@ -184,67 +214,77 @@ async def list_lease_chains(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
-    chains = (
-        sb.table("lease_chains")
-        .select("*")
-        .eq("deal_id", str(deal_id))
-        .execute()
-    )
-    result = []
-    for c in chains.data:
-        docs = (
-            sb.table("lease_chain_documents")
-            .select("*, documents(filename, original_path)")
-            .eq("chain_id", c["id"])
-            .order("amendment_number", desc=False)
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
+        chains = (
+            sb.table("lease_chains")
+            .select("*")
+            .eq("deal_id", str(deal_id))
             .execute()
         )
-        doc_list = []
-        for d in docs.data:
-            doc_info = d.get("documents") or {}
-            doc_list.append(LeaseChainDocumentResponse(
-                id=d["id"],
-                document_id=d["document_id"],
-                doc_type=d["doc_type"],
-                amendment_number=d.get("amendment_number"),
-                is_orphaned=d["is_orphaned"],
-                filename=doc_info.get("filename"),
-                original_path=doc_info.get("original_path"),
+        result = []
+        for c in chains.data:
+            docs = (
+                sb.table("lease_chain_documents")
+                .select("*, documents(filename, original_path)")
+                .eq("chain_id", c["id"])
+                .order("amendment_number", desc=False)
+                .execute()
+            )
+            doc_list = []
+            for d in docs.data:
+                doc_info = d.get("documents") or {}
+                doc_list.append(LeaseChainDocumentResponse(
+                    id=d["id"],
+                    document_id=d["document_id"],
+                    doc_type=d["doc_type"],
+                    amendment_number=d.get("amendment_number"),
+                    is_orphaned=d["is_orphaned"],
+                    filename=doc_info.get("filename"),
+                    original_path=doc_info.get("original_path"),
+                ))
+            result.append(LeaseChainResponse(
+                id=c["id"],
+                tenant_name=c["tenant_name"],
+                tenant_identifier=c.get("tenant_identifier"),
+                documents=doc_list,
             ))
-        result.append(LeaseChainResponse(
-            id=c["id"],
-            tenant_name=c["tenant_name"],
-            tenant_identifier=c.get("tenant_identifier"),
-            documents=doc_list,
-        ))
-    return ApiResponse.ok({"chains": result})
+        return ApiResponse.ok({"chains": result})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── Delete Deal ─────────────────────────────────────────────────────────────
 
 @router.delete("/{deal_id}", status_code=200)
 async def delete_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_current_user_id)):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
-
-    # Delete all storage files under this deal's prefix
     try:
-        listed = sb.storage.from_("dataroom-files").list(str(deal_id))
-        if listed:
-            paths = [f"{deal_id}/{f['name']}" for f in listed if f.get("name")]
-            if paths:
-                sb.storage.from_("dataroom-files").remove(paths)
-    except Exception:
-        pass  # Storage cleanup is best-effort; DB delete still proceeds
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
 
-    # Delete the deal row — cascades to documents, duplicates, lease chains, etc.
-    sb.table("deals").delete().eq("id", str(deal_id)).execute()
+        # Delete all storage files under this deal's prefix
+        try:
+            listed = sb.storage.from_("dataroom-files").list(str(deal_id))
+            if listed:
+                paths = [f"{deal_id}/{f['name']}" for f in listed if f.get("name")]
+                if paths:
+                    sb.storage.from_("dataroom-files").remove(paths)
+        except Exception:
+            pass  # Storage cleanup is best-effort; DB delete still proceeds
 
-    return ApiResponse.ok({"deleted": str(deal_id)})
+        # Delete the deal row — cascades to documents, duplicates, lease chains, etc.
+        sb.table("deals").delete().eq("id", str(deal_id)).execute()
+
+        return ApiResponse.ok({"deleted": str(deal_id)})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── Delete Document ──────────────────────────────────────────────────────────
@@ -255,23 +295,28 @@ async def delete_document(
     doc_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
 
-    doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).eq("deal_id", str(deal_id)).execute()
-    if not doc.data:
-        raise HTTPException(status_code=404, detail="Document not found")
+        doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).eq("deal_id", str(deal_id)).execute()
+        if not doc.data:
+            raise HTTPException(status_code=404, detail="Document not found")
 
-    storage_path = doc.data[0].get("storage_path")
-    if storage_path:
-        try:
-            sb.storage.from_("dataroom-files").remove([storage_path])
-        except Exception:
-            pass  # Best-effort; DB delete still proceeds
+        storage_path = doc.data[0].get("storage_path")
+        if storage_path:
+            try:
+                sb.storage.from_("dataroom-files").remove([storage_path])
+            except Exception:
+                pass  # Best-effort; DB delete still proceeds
 
-    sb.table("documents").delete().eq("id", str(doc_id)).execute()
-    return ApiResponse.ok({"deleted": str(doc_id)})
+        sb.table("documents").delete().eq("id", str(doc_id)).execute()
+        return ApiResponse.ok({"deleted": str(doc_id)})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── Move Document (rename original_path / virtual folder) ───────────────────
@@ -287,23 +332,28 @@ async def move_document(
     body: MoveDocumentBody,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
-    sb = get_supabase()
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        sb = get_supabase()
 
-    doc = (
-        sb.table("documents")
-        .select("id, filename, original_path")
-        .eq("id", str(doc_id))
-        .eq("deal_id", str(deal_id))
-        .execute()
-    )
-    if not doc.data:
-        raise HTTPException(status_code=404, detail="Document not found")
+        doc = (
+            sb.table("documents")
+            .select("id, filename, original_path")
+            .eq("id", str(doc_id))
+            .eq("deal_id", str(deal_id))
+            .execute()
+        )
+        if not doc.data:
+            raise HTTPException(status_code=404, detail="Document not found")
 
-    filename = doc.data[0]["filename"]
-    folder = body.new_folder.strip("/")
-    new_path = f"{folder}/{filename}" if folder else filename
+        filename = doc.data[0]["filename"]
+        folder = body.new_folder.strip("/")
+        new_path = f"{folder}/{filename}" if folder else filename
 
-    sb.table("documents").update({"original_path": new_path}).eq("id", str(doc_id)).execute()
-    return ApiResponse.ok({"id": str(doc_id), "original_path": new_path})
+        sb.table("documents").update({"original_path": new_path}).eq("id", str(doc_id)).execute()
+        return ApiResponse.ok({"id": str(doc_id), "original_path": new_path})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

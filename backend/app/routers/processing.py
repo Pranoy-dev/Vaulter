@@ -103,49 +103,54 @@ async def trigger_processing(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Trigger the processing pipeline for a deal."""
-    user_id = _resolve_user_id(clerk_user_id)
-    _verify_deal_ownership(deal_id, user_id)
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
 
-    deal_id_str = str(deal_id)
-    sb = get_supabase()
+        deal_id_str = str(deal_id)
+        sb = get_supabase()
 
-    # Check for existing job
-    job = (
-        sb.table("processing_jobs")
-        .select("*")
-        .eq("deal_id", deal_id_str)
-        .execute()
-    )
-    if not job.data:
-        raise HTTPException(status_code=400, detail="No processing job found — upload files first")
-    job_row = job.data[0]
-    # Allow re-triggering if the DB says "running" but no active in-memory task exists
-    # (e.g. server was restarted mid-run, leaving a stale "running" state in the DB)
-    if job_row["status"] == "running" and deal_id_str in _running_jobs:
-        raise HTTPException(status_code=409, detail="Processing already in progress")
+        # Check for existing job
+        job = (
+            sb.table("processing_jobs")
+            .select("*")
+            .eq("deal_id", deal_id_str)
+            .execute()
+        )
+        if not job.data:
+            raise HTTPException(status_code=400, detail="No processing job found — upload files first")
+        job_row = job.data[0]
+        # Allow re-triggering if the DB says "running" but no active in-memory task exists
+        # (e.g. server was restarted mid-run, leaving a stale "running" state in the DB)
+        if job_row["status"] == "running" and deal_id_str in _running_jobs:
+            raise HTTPException(status_code=409, detail="Processing already in progress")
 
-    # Reset job if re-running
-    sb.table("processing_jobs").update({
-        "status": "pending",
-        "current_stage": "indexing",
-        "progress": 0,
-        "error_message": None,
-        "started_at": None,
-        "completed_at": None,
-    }).eq("deal_id", deal_id_str).execute()
+        # Reset job if re-running
+        sb.table("processing_jobs").update({
+            "status": "pending",
+            "current_stage": "indexing",
+            "progress": 0,
+            "error_message": None,
+            "started_at": None,
+            "completed_at": None,
+        }).eq("deal_id", deal_id_str).execute()
 
-    # Start async task
-    task = asyncio.create_task(_run_pipeline(deal_id_str))
-    _running_jobs[deal_id_str] = task
+        # Start async task
+        task = asyncio.create_task(_run_pipeline(deal_id_str))
+        _running_jobs[deal_id_str] = task
 
-    # Re-fetch updated job
-    result = (
-        sb.table("processing_jobs")
-        .select("*")
-        .eq("deal_id", deal_id_str)
-        .execute()
-    )
-    return ApiResponse.ok(result.data[0])
+        # Re-fetch updated job
+        result = (
+            sb.table("processing_jobs")
+            .select("*")
+            .eq("deal_id", deal_id_str)
+            .execute()
+        )
+        return ApiResponse.ok(result.data[0])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.get("/{deal_id}/process/status")

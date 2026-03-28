@@ -69,28 +69,33 @@ async def create_classification(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Add a new classification to the user's company."""
-    company_id = _resolve_company_id(clerk_user_id)
-    sb = get_supabase()
+    try:
+        company_id = _resolve_company_id(clerk_user_id)
+        sb = get_supabase()
 
-    # Check for duplicate key within this company
-    existing = (
-        sb.table("company_classifications")
-        .select("id")
-        .eq("company_id", str(company_id))
-        .eq("key", body.key)
-        .execute()
-    )
-    if existing.data:
-        raise HTTPException(status_code=409, detail=f"Classification key '{body.key}' already exists")
+        # Check for duplicate key within this company
+        existing = (
+            sb.table("company_classifications")
+            .select("id")
+            .eq("company_id", str(company_id))
+            .eq("key", body.key)
+            .execute()
+        )
+        if existing.data:
+            raise HTTPException(status_code=409, detail=f"Classification key '{body.key}' already exists")
 
-    result = sb.table("company_classifications").insert({
-        "company_id": str(company_id),
-        "key": body.key,
-        "label": body.label,
-        "description": body.description,
-        "display_order": body.display_order,
-    }).execute()
-    return ApiResponse.ok(result.data[0])
+        result = sb.table("company_classifications").insert({
+            "company_id": str(company_id),
+            "key": body.key,
+            "label": body.label,
+            "description": body.description,
+            "display_order": body.display_order,
+        }).execute()
+        return ApiResponse.ok(result.data[0])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.put("/{classification_id}")
@@ -100,31 +105,36 @@ async def update_classification(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Update a classification (label, description, order, active status)."""
-    company_id = _resolve_company_id(clerk_user_id)
-    sb = get_supabase()
+    try:
+        company_id = _resolve_company_id(clerk_user_id)
+        sb = get_supabase()
 
-    # Verify ownership
-    existing = (
-        sb.table("company_classifications")
-        .select("id")
-        .eq("id", str(classification_id))
-        .eq("company_id", str(company_id))
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Classification not found")
+        # Verify ownership
+        existing = (
+            sb.table("company_classifications")
+            .select("id")
+            .eq("id", str(classification_id))
+            .eq("company_id", str(company_id))
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Classification not found")
 
-    update_data = body.model_dump(exclude_none=True)
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No fields to update")
+        update_data = body.model_dump(exclude_none=True)
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
 
-    result = (
-        sb.table("company_classifications")
-        .update(update_data)
-        .eq("id", str(classification_id))
-        .execute()
-    )
-    return ApiResponse.ok(result.data[0])
+        result = (
+            sb.table("company_classifications")
+            .update(update_data)
+            .eq("id", str(classification_id))
+            .execute()
+        )
+        return ApiResponse.ok(result.data[0])
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @router.delete("/{classification_id}")
@@ -133,19 +143,24 @@ async def delete_classification(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Remove a classification from the user's company."""
-    company_id = _resolve_company_id(clerk_user_id)
-    sb = get_supabase()
+    try:
+        company_id = _resolve_company_id(clerk_user_id)
+        sb = get_supabase()
 
-    # Verify ownership
-    existing = (
-        sb.table("company_classifications")
-        .select("id, key")
-        .eq("id", str(classification_id))
-        .eq("company_id", str(company_id))
-        .execute()
-    )
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Classification not found")
+        # Verify ownership
+        existing = (
+            sb.table("company_classifications")
+            .select("id, key")
+            .eq("id", str(classification_id))
+            .eq("company_id", str(company_id))
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Classification not found")
 
-    sb.table("company_classifications").delete().eq("id", str(classification_id)).execute()
-    return ApiResponse.ok({"deleted": str(classification_id)})
+        sb.table("company_classifications").delete().eq("id", str(classification_id)).execute()
+        return ApiResponse.ok({"deleted": str(classification_id)})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

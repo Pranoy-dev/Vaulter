@@ -77,19 +77,24 @@ async def upload_init(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Create a new upload session for a deal.  Returns session_id + chunk_size."""
-    _verify_ownership(deal_id, clerk_user_id)
+    try:
+        _verify_ownership(deal_id, clerk_user_id)
 
-    session_id = uuid.uuid4().hex
-    sb = get_supabase()
-    sb.table("deals").update({"status": "uploading"}).eq("id", str(deal_id)).execute()
+        session_id = uuid.uuid4().hex
+        sb = get_supabase()
+        sb.table("deals").update({"status": "uploading"}).eq("id", str(deal_id)).execute()
 
-    return ApiResponse.ok(
-        UploadInitResponse(
-            session_id=session_id,
-            deal_id=deal_id,
-            chunk_size=settings.upload_chunk_size,
-        ).model_dump()
-    )
+        return ApiResponse.ok(
+            UploadInitResponse(
+                session_id=session_id,
+                deal_id=deal_id,
+                chunk_size=settings.upload_chunk_size,
+            ).model_dump()
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── 2. Receive one chunk ─────────────────────────────────────────────────────
@@ -106,43 +111,48 @@ async def upload_chunk(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Store a single chunk on disk.  Lightweight — no Supabase write yet."""
-    _verify_ownership(deal_id, clerk_user_id)
+    try:
+        _verify_ownership(deal_id, clerk_user_id)
 
-    # Skip unsupported file types silently — frontend already filters these,
-    # but guard here in case a direct API call is made.
-    ext = os.path.splitext(relative_path)[1].lower()
-    if ext and ext not in ACCEPTED_EXTENSIONS:
+        # Skip unsupported file types silently — frontend already filters these,
+        # but guard here in case a direct API call is made.
+        ext = os.path.splitext(relative_path)[1].lower()
+        if ext and ext not in ACCEPTED_EXTENSIONS:
+            return ApiResponse.ok(
+                ChunkUploadResponse(
+                    relative_path=relative_path,
+                    chunk_index=chunk_index,
+                    chunks_received=0,
+                    total_chunks=total_chunks,
+                ).model_dump()
+            )
+        if chunk_index < 0 or chunk_index >= total_chunks:
+            raise HTTPException(status_code=422, detail="Invalid chunk_index")
+
+        data = await chunk.read()
+
+        chunks_received = save_chunk(
+            deal_id=str(deal_id),
+            session_id=session_id,
+            relative_path=relative_path,
+            chunk_index=chunk_index,
+            data=data,
+            total_chunks=total_chunks,
+            file_size=file_size,
+        )
+
         return ApiResponse.ok(
             ChunkUploadResponse(
                 relative_path=relative_path,
                 chunk_index=chunk_index,
-                chunks_received=0,
+                chunks_received=chunks_received,
                 total_chunks=total_chunks,
             ).model_dump()
         )
-    if chunk_index < 0 or chunk_index >= total_chunks:
-        raise HTTPException(status_code=422, detail="Invalid chunk_index")
-
-    data = await chunk.read()
-
-    chunks_received = save_chunk(
-        deal_id=str(deal_id),
-        session_id=session_id,
-        relative_path=relative_path,
-        chunk_index=chunk_index,
-        data=data,
-        total_chunks=total_chunks,
-        file_size=file_size,
-    )
-
-    return ApiResponse.ok(
-        ChunkUploadResponse(
-            relative_path=relative_path,
-            chunk_index=chunk_index,
-            chunks_received=chunks_received,
-            total_chunks=total_chunks,
-        ).model_dump()
-    )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── 3. Resume helper – query session progress ────────────────────────────────
@@ -154,25 +164,30 @@ async def upload_progress(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Return per-file chunk status so the client can resume."""
-    _verify_ownership(deal_id, clerk_user_id)
+    try:
+        _verify_ownership(deal_id, clerk_user_id)
 
-    files = get_session_files(str(deal_id), session_id)
+        files = get_session_files(str(deal_id), session_id)
 
-    return ApiResponse.ok(
-        UploadProgressResponse(
-            deal_id=deal_id,
-            session_id=session_id,
-            files=[
-                FileProgress(
-                    relative_path=f["relative_path"],
-                    file_size=f["file_size"],
-                    total_chunks=f["total_chunks"],
-                    uploaded_chunks=f["uploaded_chunks"],
-                )
-                for f in files
-            ],
-        ).model_dump()
-    )
+        return ApiResponse.ok(
+            UploadProgressResponse(
+                deal_id=deal_id,
+                session_id=session_id,
+                files=[
+                    FileProgress(
+                        relative_path=f["relative_path"],
+                        file_size=f["file_size"],
+                        total_chunks=f["total_chunks"],
+                        uploaded_chunks=f["uploaded_chunks"],
+                    )
+                    for f in files
+                ],
+            ).model_dump()
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 # ── 4. Finalise — assemble, hash, push to Supabase, create DB rows ──────────
@@ -185,109 +200,114 @@ async def upload_complete(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Assemble every file from its chunks, upload to Supabase Storage, and insert document rows."""
-    _verify_ownership(deal_id, clerk_user_id)
+    try:
+        _verify_ownership(deal_id, clerk_user_id)
 
-    sb = get_supabase()
-    files = get_session_files(str(deal_id), session_id)
+        sb = get_supabase()
+        files = get_session_files(str(deal_id), session_id)
 
-    if not files:
-        raise HTTPException(status_code=422, detail="No files found in this session")
+        if not files:
+            raise HTTPException(status_code=422, detail="No files found in this session")
 
-    total_size = 0
-    uploaded_count = 0
+        total_size = 0
+        uploaded_count = 0
 
-    for fmeta in files:
-        relative_path: str = fmeta["relative_path"]
-        total_chunks: int = fmeta["total_chunks"]
-        received = fmeta["uploaded_chunks"]
+        for fmeta in files:
+            relative_path: str = fmeta["relative_path"]
+            total_chunks: int = fmeta["total_chunks"]
+            received = fmeta["uploaded_chunks"]
 
-        # Ensure every chunk is present
-        if len(received) != total_chunks:
-            missing = set(range(total_chunks)) - set(received)
-            raise HTTPException(
-                status_code=422,
-                detail=f"File '{relative_path}' is missing chunks: {sorted(missing)}",
+            # Ensure every chunk is present
+            if len(received) != total_chunks:
+                missing = set(range(total_chunks)) - set(received)
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"File '{relative_path}' is missing chunks: {sorted(missing)}",
+                )
+
+            # Assemble
+            content, size = assemble_file(str(deal_id), session_id, relative_path)
+            total_size += size
+
+            if total_size > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Upload exceeds 5 GB limit")
+
+            sha256 = hashlib.sha256(content).hexdigest()
+            filename = os.path.basename(relative_path)
+            ext = os.path.splitext(filename)[1].lower() or None
+            content_type = (
+                _MIME_MAP.get(ext or "")
+                or mimetypes.guess_type(filename)[0]
+                or "application/pdf"  # Supabase rejects octet-stream; pdf is safest fallback
             )
 
-        # Assemble
-        content, size = assemble_file(str(deal_id), session_id, relative_path)
-        total_size += size
+            # Push to Supabase Storage (date-prefixed path)
+            storage_path = upload_file(str(deal_id), relative_path, content, content_type)
 
-        if total_size > MAX_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="Upload exceeds 5 GB limit")
+            # Upsert document — resets all processing fields if file already exists
+            sb.table("documents").upsert({
+                "deal_id": str(deal_id),
+                "original_path": relative_path,
+                "filename": filename,
+                "file_extension": ext,
+                "file_type": content_type,
+                "file_size": size,
+                "sha256_hash": sha256,
+                "storage_path": storage_path,
+                "rag_indexed": False,
+                "rag_indexed_at": None,
+                "assigned_category": "other",
+                "classification_confidence": 0,
+                "classification_reasoning": None,
+                "extracted_text": None,
+                "is_incomplete": False,
+                "incompleteness_reasons": None,
+                "is_empty": False,
+                "processing_status": "pending",
+                "processing_error": None,
+                "classified_at": None,
+            }, on_conflict="deal_id,original_path").execute()
+            uploaded_count += 1
 
-        sha256 = hashlib.sha256(content).hexdigest()
-        filename = os.path.basename(relative_path)
-        ext = os.path.splitext(filename)[1].lower() or None
-        content_type = (
-            _MIME_MAP.get(ext or "")
-            or mimetypes.guess_type(filename)[0]
-            or "application/pdf"  # Supabase rejects octet-stream; pdf is safest fallback
-        )
-
-        # Push to Supabase Storage (date-prefixed path)
-        storage_path = upload_file(str(deal_id), relative_path, content, content_type)
-
-        # Upsert document — resets all processing fields if file already exists
-        sb.table("documents").upsert({
-            "deal_id": str(deal_id),
-            "original_path": relative_path,
-            "filename": filename,
-            "file_extension": ext,
-            "file_type": content_type,
-            "file_size": size,
-            "sha256_hash": sha256,
-            "storage_path": storage_path,
-            "rag_indexed": False,
-            "rag_indexed_at": None,
-            "assigned_category": "other",
-            "classification_confidence": 0,
-            "classification_reasoning": None,
-            "extracted_text": None,
-            "is_incomplete": False,
-            "incompleteness_reasons": None,
-            "is_empty": False,
-            "processing_status": "pending",
-            "processing_error": None,
-            "classified_at": None,
-        }, on_conflict="deal_id,original_path").execute()
-        uploaded_count += 1
-
-    # Parse skipped files JSON (sent by client)
-    try:
-        import json
-        skipped_list = json.loads(skipped_files) if skipped_files else []
-        if not isinstance(skipped_list, list):
+        # Parse skipped files JSON (sent by client)
+        try:
+            import json
+            skipped_list = json.loads(skipped_files) if skipped_files else []
+            if not isinstance(skipped_list, list):
+                skipped_list = []
+        except Exception:
             skipped_list = []
-    except Exception:
-        skipped_list = []
 
-    # Update deal counters
-    sb.table("deals").update({
-        "status": "uploaded",
-        "file_count": uploaded_count,
-        "total_size": total_size,
-        "skipped_files": skipped_list,
-    }).eq("id", str(deal_id)).execute()
+        # Update deal counters
+        sb.table("deals").update({
+            "status": "uploaded",
+            "file_count": uploaded_count,
+            "total_size": total_size,
+            "skipped_files": skipped_list,
+        }).eq("id", str(deal_id)).execute()
 
-    # Upsert processing job — handles re-uploads to the same deal
-    sb.table("processing_jobs").upsert({
-        "deal_id": str(deal_id),
-        "status": "pending",
-        "current_stage": "indexing",
-        "progress": 0,
-        "error_message": None,
-        "started_at": None,
-        "completed_at": None,
-    }, on_conflict="deal_id").execute()
+        # Upsert processing job — handles re-uploads to the same deal
+        sb.table("processing_jobs").upsert({
+            "deal_id": str(deal_id),
+            "status": "pending",
+            "current_stage": "indexing",
+            "progress": 0,
+            "error_message": None,
+            "started_at": None,
+            "completed_at": None,
+        }, on_conflict="deal_id").execute()
 
-    # Clean up temp chunks
-    cleanup_session(str(deal_id), session_id)
+        # Clean up temp chunks
+        cleanup_session(str(deal_id), session_id)
 
-    return ApiResponse.ok(
-        UploadCompleteResponse(
-            deal_id=deal_id,
-            files_uploaded=uploaded_count,
-            total_size=total_size,
-        ).model_dump()
-    )
+        return ApiResponse.ok(
+            UploadCompleteResponse(
+                deal_id=deal_id,
+                files_uploaded=uploaded_count,
+                total_size=total_size,
+            ).model_dump()
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

@@ -488,10 +488,12 @@ function FileStructurePanel({
         setLocalPathOverrides((prev) => ({ ...prev, [docId]: newPath }))
         onDeleted?.()
       } else {
-        toast.error("Failed to move file")
+        const body = await res.json().catch(() => null)
+        const detail = body?.error?.message ?? body?.detail ?? `Server error (${res.status})`
+        toast.error("Failed to move file", { description: detail })
       }
-    } catch {
-      toast.error("Failed to move file")
+    } catch (err) {
+      toast.error("Failed to move file", { description: err instanceof Error ? err.message : "Network error" })
     } finally {
       setMovingId(null)
     }
