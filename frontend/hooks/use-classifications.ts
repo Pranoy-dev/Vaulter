@@ -35,11 +35,13 @@ export function useClassifications() {
   const { getToken } = useAuth()
   const [classifications, setClassifications] = React.useState<Classification[]>([])
   const [loading, setLoading] = React.useState(false)
+  const getTokenRef = React.useRef(getToken)
+  React.useEffect(() => { getTokenRef.current = getToken }, [getToken])
 
   React.useEffect(() => {
     let cancelled = false
     setLoading(true)
-    authedGet<{ classifications: Classification[] }>("/api/classifications", getToken).then(
+    authedGet<{ classifications: Classification[] }>("/api/classifications", getTokenRef.current).then(
       (res) => {
         if (cancelled) return
         setClassifications(res?.classifications ?? [])
@@ -49,7 +51,7 @@ export function useClassifications() {
     return () => {
       cancelled = true
     }
-  }, [getToken])
+  }, [])
 
   return { classifications, loading }
 }

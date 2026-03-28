@@ -2,10 +2,9 @@
 
 import * as React from "react"
 import { useAuth } from "@clerk/nextjs"
+import { io, Socket } from "socket.io-client"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
-const POLL_INTERVAL_ACTIVE_MS = 5000
-const POLL_INTERVAL_HIDDEN_MS = 15000
 
 export type ProcessingStatus = "pending" | "running" | "completed" | "failed" | null
 export type ProcessingStage =
@@ -68,15 +67,13 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
     errorMessage: null,
     loading: false,
   })
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isFetchingRef = React.useRef(false)
-  // Keep a stable ref to getToken so we never need it in effect deps
+  const socketRef = React.useRef<Socket | null>(null)
   const getTokenRef = React.useRef(getToken)
   React.useEffect(() => { getTokenRef.current = getToken }, [getToken])
 
-  const fetchStatus = React.useCallback(async () => {
-    if (!dealId || isFetchingRef.current) return
-    isFetchingRef.current = true
+  // Fetch initial state via REST (needed on page load / reconnect)
+  const fetchInitial = React.useCallback(async () => {
+    if (!dealId) return
     try {
       const token = await getTokenRef.current()
       if (!token) return
@@ -87,7 +84,10 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
         setState((s) => ({ ...s, loading: false, status: null }))
         return
       }
-      if (!res.ok) return
+      if (!res.ok) {
+        setState((s) => ({ ...s, loading: false }))
+        return
+      }
       const body = await res.json()
       const data = body.data ?? body
       setState({
@@ -99,8 +99,6 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
       })
     } catch {
       setState((s) => ({ ...s, loading: false }))
-    } finally {
-      isFetchingRef.current = false
     }
   }, [dealId])
 
@@ -108,35 +106,59 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
     if (!dealId) return
 
     setState((s) => ({ ...s, loading: true }))
-    fetchStatus()
 
-    const schedule = () => {
-      const interval = document.hidden ? POLL_INTERVAL_HIDDEN_MS : POLL_INTERVAL_ACTIVE_MS
-      timerRef.current = setTimeout(async () => {
-        await fetchStatus()
-        setState((current) => {
-          if (current.status === "running" || current.status === "pending") {
-            schedule()
-          }
-          return current
-        })
-      }, interval)
-    }
-    schedule()
+    // Connect Socket.IO for real-time updates
+    const isDev = process.env.NODE_ENV === "development"
+    const socket = io(BACKEND_URL, {
+      path: "/socket.io",
+      // In dev, uvicorn --reload breaks WebSocket upgrade; use polling only.
+      // In production (no --reload), allow WebSocket upgrade for lower latency.
+      transports: isDev ? ["polling"] : ["polling", "websocket"],
+      upgrade: !isDev,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+    })
+    socketRef.current = socket
+
+    socket.on("connect", () => {
+      socket.emit("join_deal", { deal_id: dealId })
+      // Fetch current state on (re)connect to fill any gap
+      fetchInitial()
+    })
+
+    socket.on("processing_update", (data: {
+      status?: string | null
+      current_stage?: string | null
+      progress?: number | null
+      error_message?: string | null
+    }) => {
+      setState((prev) => ({
+        status: (data.status ?? prev.status) as ProcessingStatus,
+        currentStage: (data.current_stage ?? prev.currentStage) as ProcessingStage,
+        progress: data.progress ?? prev.progress,
+        errorMessage: data.error_message !== undefined ? data.error_message : prev.errorMessage,
+        loading: false,
+      }))
+    })
+
+    socket.on("disconnect", () => {
+      // Socket.IO will auto-reconnect; no action needed
+    })
+
+    // Fallback: poll every 15s regardless of socket health
+    const pollInterval = setInterval(() => {
+      fetchInitial()
+    }, 15_000)
 
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
+      clearInterval(pollInterval)
+      socket.emit("leave_deal", { deal_id: dealId })
+      socket.disconnect()
+      socketRef.current = null
     }
-  }, [dealId, fetchStatus])
-
-  // When a running job completes, do one final fetch after a short delay
-  const prevStatus = React.useRef<ProcessingStatus>(null)
-  React.useEffect(() => {
-    if (prevStatus.current === "running" && state.status === "completed") {
-      // already got the completed state — no extra fetch needed
-    }
-    prevStatus.current = state.status
-  }, [state.status])
+  }, [dealId, fetchInitial])
 
   return state
 }

@@ -1,4 +1,4 @@
-"""Processing pipeline — trigger + SSE status endpoint (Phase 4)."""
+"""Processing pipeline — trigger + status endpoint (Phase 4)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from app.auth import get_current_user_id
 from app.db.client import get_supabase
 from app.models.schemas import ApiResponse, ProcessingJobResponse
 from app.routers.deals import _resolve_user_id, _verify_deal_ownership
+from app.socketio_server import emit_processing_update
 
 router = APIRouter()
 
@@ -21,10 +22,10 @@ router = APIRouter()
 _running_jobs: dict[str, asyncio.Task] = {}
 
 
-def _update_job(deal_id: str, *, status: str | None = None, stage: str | None = None,
+async def _update_job(deal_id: str, *, status: str | None = None, stage: str | None = None,
                 progress: float | None = None, error: str | None = None,
                 started: bool = False, completed: bool = False):
-    """Update the processing_jobs row."""
+    """Update the processing_jobs row and push via Socket.IO."""
     sb = get_supabase()
     update: dict = {}
     if status:
@@ -42,6 +43,14 @@ def _update_job(deal_id: str, *, status: str | None = None, stage: str | None = 
     if update:
         sb.table("processing_jobs").update(update).eq("deal_id", deal_id).execute()
 
+    # Push real-time update via Socket.IO
+    await emit_processing_update(deal_id, {
+        "status": status,
+        "current_stage": stage,
+        "progress": progress,
+        "error_message": error,
+    })
+
 
 async def _run_pipeline(deal_id: str):
     """Execute the 3-stage processing pipeline sequentially."""
@@ -50,39 +59,39 @@ async def _run_pipeline(deal_id: str):
     try:
         # Update deal status
         sb.table("deals").update({"status": "processing"}).eq("id", deal_id).execute()
-        _update_job(deal_id, status="running", stage="indexing", progress=0, started=True)
+        await _update_job(deal_id, status="running", stage="indexing", progress=0, started=True)
 
         # Stage 1: Indexing (already done during upload — just mark progress)
         await asyncio.sleep(0.5)  # Small pause for UX
-        _update_job(deal_id, progress=0.10)
+        await _update_job(deal_id, progress=0.10)
 
         # Stage 2: Document Processing (Gemini extraction + classification + completeness)
-        _update_job(deal_id, stage="document_processing", progress=0.12)
+        await _update_job(deal_id, stage="document_processing", progress=0.12)
         from app.services.gemini_processor import process_deal_documents
         await asyncio.to_thread(process_deal_documents, deal_id)
-        _update_job(deal_id, progress=0.50)
+        await _update_job(deal_id, progress=0.50)
 
         # Stage 3: Duplicate Detection
-        _update_job(deal_id, stage="detecting_duplicates", progress=0.52)
+        await _update_job(deal_id, stage="detecting_duplicates", progress=0.52)
         from app.services.duplicate_detection import detect_duplicates
         await asyncio.to_thread(detect_duplicates, deal_id)
-        _update_job(deal_id, progress=0.70)
+        await _update_job(deal_id, progress=0.70)
 
         # Stage 4: Lease & Amendment Linking
-        _update_job(deal_id, stage="linking_documents", progress=0.72)
+        await _update_job(deal_id, stage="linking_documents", progress=0.72)
         from app.services.lease_linker import link_leases
         await asyncio.to_thread(link_leases, deal_id)
-        _update_job(deal_id, progress=0.85)
+        await _update_job(deal_id, progress=0.85)
 
         # Stage 5: Building overview (compute summary stats)
-        _update_job(deal_id, stage="building_overview", progress=0.90)
+        await _update_job(deal_id, stage="building_overview", progress=0.90)
         await asyncio.sleep(0.3)
-        _update_job(deal_id, stage="done", progress=1.0, status="completed", completed=True)
+        await _update_job(deal_id, stage="done", progress=1.0, status="completed", completed=True)
 
         sb.table("deals").update({"status": "completed"}).eq("id", deal_id).execute()
 
     except Exception as exc:
-        _update_job(deal_id, status="failed", error=str(exc))
+        await _update_job(deal_id, status="failed", error=str(exc))
         sb.table("deals").update({"status": "failed"}).eq("id", deal_id).execute()
     finally:
         _running_jobs.pop(deal_id, None)

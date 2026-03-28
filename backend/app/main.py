@@ -163,3 +163,10 @@ async def get_me(clerk_user_id: str = Depends(get_current_user_id)):
             company_data = company_rows.data[0]
 
     return ApiResponse.ok({**user_data, "company": company_data, "synced": True, "created": created})
+
+
+# ── Socket.IO — wrap FastAPI so both share the same ASGI server ──────────────
+import socketio as _socketio
+from app.socketio_server import sio
+
+combined_app = _socketio.ASGIApp(sio, other_asgi_app=app)

@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
 import { DemoAgentProcessingLog } from "@/features/project-setup/demo-workspace/demo-agent-processing-log"
@@ -83,6 +84,17 @@ function ClickTooltip({ content, children }: { content: string; children: React.
         <span onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}>
           {children}
         </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs whitespace-pre-wrap">{content}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function HoverTooltip({ content, children }: { content: string; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span>{children}</span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs whitespace-pre-wrap">{content}</TooltipContent>
     </Tooltip>
@@ -322,7 +334,7 @@ function TreeNodeRow({
               ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
               : showStatus && doc.processing_status === "processing"
                 ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
-                : showStatus && doc.classification_confidence > 0
+                : showStatus && (doc.classification_confidence > 0 || doc.processing_status === "completed")
                   ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
                   : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
             {onPreview ? (
@@ -358,6 +370,8 @@ function TreeNodeRow({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
                         {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
                       </span>
+                    ) : doc.processing_status === "completed" ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
                       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
                     )}
@@ -368,6 +382,13 @@ function TreeNodeRow({
                         <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-pointer">Incomplete</span>
                       </ClickTooltip>
                     )}
+                  </div>
+                  <div className="w-20 flex justify-end">
+                    <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
+                      {doc.rag_indexed
+                        ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
+                        : <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
+                    </HoverTooltip>
                   </div>
                 </>
               )}
@@ -660,7 +681,7 @@ function FileStructurePanel({
               ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
               : showStatus && doc.processing_status === "processing"
                 ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
-                : showStatus && doc.classification_confidence > 0
+                : showStatus && (doc.classification_confidence > 0 || doc.processing_status === "completed")
                   ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
                   : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
             {canPreview ? (
@@ -694,6 +715,8 @@ function FileStructurePanel({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
                         {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
                       </span>
+                    ) : doc.processing_status === "completed" ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
                       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
                     )}
@@ -704,6 +727,13 @@ function FileStructurePanel({
                         <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-pointer">Incomplete</span>
                       </ClickTooltip>
                     )}
+                  </div>
+                  <div className="w-20 flex justify-end">
+                    <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
+                      {doc.rag_indexed
+                        ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
+                        : <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
+                    </HoverTooltip>
                   </div>
                 </>
               )}
@@ -938,6 +968,7 @@ const CATEGORY_BAR_COLORS: Record<string, string> = {
 function ClassificationPanel({
   classifications,
   documents,
+  duplicates,
   loading,
   dealId,
   onProcessed,
@@ -947,6 +978,7 @@ function ClassificationPanel({
 }: {
   classifications: Classification[]
   documents: DealDocument[]
+  duplicates: DuplicateGroup[]
   loading: boolean
   dealId: string | null
   onProcessed: () => void
@@ -956,10 +988,11 @@ function ClassificationPanel({
 }) {
   const { getToken } = useAuth()
   const [processing, setProcessing] = React.useState(false)
+  const [showDuplicateWarning, setShowDuplicateWarning] = React.useState(false)
   // null = show all; "unclassified" = unclassified filter; any clf.key = that category
   const [selectedFilter, setSelectedFilter] = React.useState<string | null>(null)
 
-  const handleProcess = React.useCallback(async () => {
+  const doProcess = React.useCallback(async () => {
     if (!dealId) return
     setProcessing(true)
     try {
@@ -983,6 +1016,14 @@ function ClassificationPanel({
       setProcessing(false)
     }
   }, [dealId, getToken, onProcessed])
+
+  const handleProcess = React.useCallback(() => {
+    if (duplicates.length > 0) {
+      setShowDuplicateWarning(true)
+    } else {
+      doProcess()
+    }
+  }, [duplicates.length, doProcess])
 
   if (loading) return <LoadingRows />
   if (classifications.length === 0)
@@ -1019,6 +1060,21 @@ function ClassificationPanel({
 
   return (
     <div className="space-y-3">
+      {/* Duplicate warning dialog */}
+      <Dialog open={showDuplicateWarning} onOpenChange={setShowDuplicateWarning}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duplicate files detected</DialogTitle>
+            <DialogDescription>
+              {duplicates.length} duplicate group{duplicates.length !== 1 ? "s" : ""} exist in your data room. Processing now may classify duplicates separately. Consider resolving duplicates first.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowDuplicateWarning(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => { setShowDuplicateWarning(false); doProcess() }}>Process anyway</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Action bar */}
       {dealId && (
         <div className="space-y-2">
@@ -1284,29 +1340,32 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
         d.processing_status === "pending" ||
         (!d.rag_indexed && d.processing_status !== "failed"),
     )
-  // Only tick when the relevant tab is active
+  // Only tick when the relevant tab is active AND processing is running
+  const isProcessingActive = processingJob.status === "running" || processingJob.status === "pending"
   const tabNeedsRefresh =
+    isProcessingActive &&
     hasDocsNeedingWork &&
     (section === "upload" || section === "file-structure")
   // Keep a stable ref to silentRefresh so the interval closure never goes stale
   const silentRefreshRef = React.useRef(dealData.silentRefresh)
   React.useEffect(() => { silentRefreshRef.current = dealData.silentRefresh }, [dealData.silentRefresh])
+  const REFRESH_INTERVAL = 15
   React.useEffect(() => {
     if (!tabNeedsRefresh) {
-      setRefreshCountdown(5)
+      setRefreshCountdown(REFRESH_INTERVAL)
       return
     }
     const timer = setInterval(() => {
       setRefreshCountdown((prev) => {
         if (prev <= 1) {
           silentRefreshRef.current()
-          return 5
+          return REFRESH_INTERVAL
         }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [hasDocsNeedingWork])
+  }, [tabNeedsRefresh])
 
   const startDrag = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -1570,6 +1629,19 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                 Upload
               </ToggleGroupItem>
               <ToggleGroupItem
+                value="duplication"
+                aria-label="Duplication"
+                className={sectionToggleItemClass}
+              >
+                <Copy aria-hidden />
+                Duplication
+                {dealData.duplicates.length > 0 && (
+                  <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950/50 dark:text-red-400">
+                    {dealData.duplicates.length}
+                  </span>
+                )}
+              </ToggleGroupItem>
+              <ToggleGroupItem
                 value="file-structure"
                 aria-label="Classification"
                 className={sectionToggleItemClass}
@@ -1591,19 +1663,6 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     </span>
                   )
                 })()}
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="duplication"
-                aria-label="Duplication"
-                className={sectionToggleItemClass}
-              >
-                <Copy aria-hidden />
-                Duplication
-                {dealData.duplicates.length > 0 && (
-                  <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950/50 dark:text-red-400">
-                    {dealData.duplicates.length}
-                  </span>
-                )}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="lease-amendment"
@@ -1770,21 +1829,21 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                           <div className="grid grid-cols-2 gap-2 px-4 py-2.5 border-b border-border/40">
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-medium text-muted-foreground">RAG Indexed</span>
-                                <span className="text-[11px] font-semibold tabular-nums">
-                                  {ragCount}/{docs.length} ({ragPct}%)
-                                </span>
-                              </div>
-                              <Progress value={ragPct} className="h-1" />
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between">
                                 <span className="text-[11px] font-medium text-muted-foreground">Classified</span>
                                 <span className="text-[11px] font-semibold tabular-nums">
                                   {classifiedCount}/{docs.length} ({classPct}%)
                                 </span>
                               </div>
                               <Progress value={classPct} className="h-1" />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-medium text-muted-foreground">RAG Indexed</span>
+                                <span className="text-[11px] font-semibold tabular-nums">
+                                  {ragCount}/{docs.length} ({ragPct}%)
+                                </span>
+                              </div>
+                              <Progress value={ragPct} className="h-1" />
                             </div>
                           </div>
                         </div>
@@ -2177,6 +2236,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                   <ClassificationPanel
                     classifications={classifications}
                     documents={dealData.documents}
+                    duplicates={dealData.duplicates}
                     loading={classificationsLoading}
                     dealId={dealId}
                     onProcessed={dealData.refresh}

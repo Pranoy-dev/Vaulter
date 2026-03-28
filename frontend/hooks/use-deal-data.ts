@@ -97,28 +97,31 @@ export function useDealData(dealId: string | null): DealData {
   const [loading, setLoading] = React.useState(false)
   const [tick, setTick] = React.useState(0)
   const silentRef = React.useRef(false)
+  const getTokenRef = React.useRef(getToken)
+  React.useEffect(() => { getTokenRef.current = getToken }, [getToken])
 
   React.useEffect(() => {
     if (!dealId) return
     let cancelled = false
     if (!silentRef.current) setLoading(true)
     silentRef.current = false
+    const tokenFn = getTokenRef.current
     Promise.all([
       authedGet<{ documents: DealDocument[]; total: number }>(
         `/api/deals/${dealId}/documents`,
-        getToken,
+        tokenFn,
       ),
       authedGet<{ groups: DuplicateGroup[] }>(
         `/api/deals/${dealId}/duplicates`,
-        getToken,
+        tokenFn,
       ),
       authedGet<{ chains: LeaseChain[] }>(
         `/api/deals/${dealId}/lease-chains`,
-        getToken,
+        tokenFn,
       ),
       authedGet<{ id: string; skipped_files: string[] | null }>(
         `/api/deals/${dealId}`,
-        getToken,
+        tokenFn,
       ),
     ]).then(([docsRes, dupsRes, chainsRes, dealRes]) => {
       if (cancelled) return
@@ -129,7 +132,7 @@ export function useDealData(dealId: string | null): DealData {
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [dealId, getToken, tick])
+  }, [dealId, tick])
 
   const refresh = React.useCallback(() => {
     silentRef.current = false
