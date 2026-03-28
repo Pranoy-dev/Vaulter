@@ -383,11 +383,11 @@ function TreeNodeRow({
                       </ClickTooltip>
                     )}
                   </div>
-                  <div className="w-20 flex justify-end">
+                  <div className="w-24 flex justify-end">
                     <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
                       {doc.rag_indexed
-                        ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
-                        : <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
+                        ? <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
+                        : <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
                     </HoverTooltip>
                   </div>
                 </>
@@ -728,11 +728,11 @@ function FileStructurePanel({
                       </ClickTooltip>
                     )}
                   </div>
-                  <div className="w-20 flex justify-end">
+                  <div className="w-24 flex justify-end">
                     <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
                       {doc.rag_indexed
-                        ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
-                        : <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
+                        ? <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
+                        : <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
                     </HoverTooltip>
                   </div>
                 </>
