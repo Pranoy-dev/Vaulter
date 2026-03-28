@@ -59,6 +59,7 @@ import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-
 import { useClassifications } from "@/hooks/use-classifications"
 import type { Classification } from "@/hooks/use-classifications"
 import { useProcessingStatus } from "@/hooks/use-processing-status"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type SetupSection =
   | "upload"
@@ -72,6 +73,20 @@ const sectionToggleItemClass =
 
 const sectionToggleGroupClass =
   "flex w-full flex-col gap-1.5 rounded-[14px] border border-zinc-200/90 bg-zinc-100/95 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),inset_0_-1px_0_rgba(0,0,0,0.02)] backdrop-blur-xl sm:flex-row sm:items-stretch sm:gap-1 sm:rounded-[13px]"
+
+function ClickTooltip({ content, children }: { content: string; children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false)
+  return (
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        <span onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}>
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs whitespace-pre-wrap">{content}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -219,7 +234,7 @@ function TreeNodeRow({
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted/50 transition-colors"
+          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium bg-muted/40 hover:bg-muted/60 transition-colors"
           style={{ paddingLeft: `${8 + indent}px` }}
         >
           <ChevronRight
@@ -277,10 +292,9 @@ function TreeNodeRow({
                     {doc.processing_status === "processing" ? (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
                     ) : doc.processing_status === "failed" ? (
-                      <span
-                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                        title={doc.processing_error ?? "Processing failed"}
-                      >Failed</span>
+                      <ClickTooltip content={doc.processing_error ?? "Processing failed"}>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-pointer">Failed</span>
+                      </ClickTooltip>
                     ) : doc.is_empty ? (
                       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
                     ) : doc.classification_confidence > 0 ? (
@@ -293,10 +307,9 @@ function TreeNodeRow({
                   </div>
                   <div className="w-20 flex justify-end">
                     {doc.is_incomplete && (
-                      <span
-                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                        title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
-                      >Incomplete</span>
+                      <ClickTooltip content={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-pointer">Incomplete</span>
+                      </ClickTooltip>
                     )}
                   </div>
                 </>
@@ -465,10 +478,9 @@ function FileStructurePanel({
                     {doc.processing_status === "processing" ? (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
                     ) : doc.processing_status === "failed" ? (
-                      <span
-                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                        title={doc.processing_error ?? "Processing failed"}
-                      >Failed</span>
+                      <ClickTooltip content={doc.processing_error ?? "Processing failed"}>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-pointer">Failed</span>
+                      </ClickTooltip>
                     ) : doc.is_empty ? (
                       <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
                     ) : doc.classification_confidence > 0 ? (
@@ -481,10 +493,9 @@ function FileStructurePanel({
                   </div>
                   <div className="w-20 flex justify-end">
                     {doc.is_incomplete && (
-                      <span
-                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                        title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
-                      >Incomplete</span>
+                      <ClickTooltip content={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-pointer">Incomplete</span>
+                      </ClickTooltip>
                     )}
                   </div>
                 </>
@@ -1499,6 +1510,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                       const processPct = docs.length > 0 ? Math.round((processedCount / docs.length) * 100) : 0
 
                       return (
+                        <div className="space-y-3">
                         <div className="rounded-xl border border-border/70 bg-background/60 overflow-hidden">
                           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border/50">
                             <div className="min-w-0 flex-1">
@@ -1566,133 +1578,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                               <Progress value={classPct} className="h-1" />
                             </div>
                           </div>
-                          {/* Table header */}
-                          <div className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem_2.5rem] items-center gap-x-2 border-b border-border/40 bg-muted/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                            <span />
-                            <span>File</span>
-                            <span className="text-right">Size</span>
-                            <span className="text-center">RAG</span>
-                            <span className="text-center">Classification</span>
-                            <span className="text-center">Status</span>
-                            <span />
-                          </div>
-                          {/* File rows */}
-                          <div className={docs.length > 10 ? "max-h-[320px] overflow-y-auto" : ""}>
-                            <div className="divide-y divide-border/30">
-                              {dealData.loading ? (
-                                <div className="p-3 space-y-2">
-                                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}
-                                </div>
-                              ) : (
-                                docs.filter((d) => !uploadDeletedIds.has(d.id)).map((doc) => {
-                                  const classified = doc.classification_confidence > 0
-                                  const ragged = doc.rag_indexed
-                                  return (
-                                    <div key={doc.id} className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem_2.5rem] items-center gap-x-2 px-3 py-1.5 text-xs hover:bg-muted/20">
-                                      {/* Icon */}
-                                      <div className="flex items-center justify-center">
-                                        {doc.processing_status === "processing"
-                                          ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
-                                          : ragged && classified
-                                            ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
-                                            : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
-                                        }
-                                      </div>
-                                      {/* File path — clickable preview */}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleUploadPreview(doc.id, doc.filename, e.ctrlKey || e.metaKey)}
-                                        disabled={uploadLoadingPreviewId === doc.id}
-                                        className="group min-w-0 flex items-center gap-1 text-left text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                                        title="Click to preview · Ctrl+click to open in new tab"
-                                      >
-                                        {uploadLoadingPreviewId === doc.id
-                                          ? <Loader2 className="size-3 shrink-0 animate-spin" />
-                                          : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
-                                        <span className="truncate">{doc.original_path}</span>
-                                      </button>
-                                      {/* Size */}
-                                      <span className="text-right tabular-nums text-muted-foreground/50">
-                                        {formatBytes(doc.file_size)}
-                                      </span>
-                                      {/* RAG */}
-                                      <div className="flex justify-center">
-                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                          ragged
-                                            ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                                            : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-                                        }`}>
-                                          {ragged ? "✓ Indexed" : "Pending"}
-                                        </span>
-                                      </div>
-                                      {/* Classification */}
-                                      <div className="flex justify-center">
-                                        {doc.processing_status === "processing" ? (
-                                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                                            Analyzing…
-                                          </span>
-                                        ) : doc.processing_status === "failed" ? (
-                                          <span
-                                            className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                                            title={doc.processing_error ?? "Processing failed"}
-                                          >
-                                            Failed
-                                          </span>
-                                        ) : doc.is_empty ? (
-                                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
-                                            Empty
-                                          </span>
-                                        ) : classified ? (
-                                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
-                                            {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
-                                          </span>
-                                        ) : (
-                                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                                            Pending
-                                          </span>
-                                        )}
-                                      </div>
-                                      {/* Status / Incomplete */}
-                                      <div className="flex justify-center">
-                                        {doc.is_empty ? (
-                                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">
-                                            Empty
-                                          </span>
-                                        ) : doc.is_incomplete ? (
-                                          <span
-                                            className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                                            title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
-                                          >
-                                            Incomplete
-                                          </span>
-                                        ) : classified && ragged ? (
-                                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400">
-                                            Done
-                                          </span>
-                                        ) : (
-                                          <span className="text-[11px] text-muted-foreground/30">—</span>
-                                        )}
-                                      </div>
-                                      {/* Delete */}
-                                      <div className="flex justify-center">
-                                        <button
-                                          type="button"
-                                          disabled={uploadDeletingId === doc.id}
-                                          onClick={() => setUploadConfirmDelete({ id: doc.id, filename: doc.filename })}
-                                          className="text-muted-foreground/30 hover:text-red-500 transition-colors disabled:opacity-40"
-                                          title="Delete file"
-                                        >
-                                          {uploadDeletingId === doc.id
-                                            ? <Loader2 className="size-3.5 animate-spin" />
-                                            : <Trash2 className="size-3.5" />}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )
-                                })
-                              )}
-                            </div>
-                          </div>
+                        </div>
+                        <FileStructurePanel documents={docs} loading={false} showStatus dealId={dealId} getToken={getToken} onDeleted={dealData.silentRefresh} />
                         </div>
                       )
                     })()}
