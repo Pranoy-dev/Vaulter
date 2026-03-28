@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -39,6 +40,19 @@ def _get_client() -> genai.Client:
 # ── Pydantic schema for Gemini structured output ────────────────────────────
 
 
+class SemanticChunk(BaseModel):
+    """A semantically coherent chunk of document text for embedding."""
+    title: str = Field(
+        description="Short descriptive title for this chunk (e.g. 'Rent Escalation Clause', 'Parties and Recitals', 'Signature Block')."
+    )
+    content: str = Field(
+        description="The full text of this chunk. Should be self-contained and meaningful on its own."
+    )
+    topic: str = Field(
+        description="The primary topic or section type (e.g. 'definitions', 'financial_terms', 'obligations', 'termination', 'signatures', 'recitals')."
+    )
+
+
 class DocumentAnalysis(BaseModel):
     """Structured output returned by Gemini for every document."""
     extracted_text: str = Field(description="Full text content extracted from the document.")
@@ -54,6 +68,30 @@ class DocumentAnalysis(BaseModel):
     )
     incompleteness_reasons: list[str] = Field(
         description="List of specific reasons the document is incomplete, empty if complete."
+    )
+    summary: str = Field(
+        description="A concise 2-4 sentence summary of the document's content and purpose."
+    )
+    expiry_date: str | None = Field(
+        description="Expiry, termination, or end date found in the document (ISO 8601 format e.g. 2025-12-31), or null if none."
+    )
+    has_signature: bool = Field(
+        description="Whether the document contains handwritten or digital signatures."
+    )
+    has_seal: bool = Field(
+        description="Whether the document contains official seals, stamps, or notary marks."
+    )
+    parties: list[str] = Field(
+        description="Names of all parties, companies, or entities mentioned as signatories or principals in the document."
+    )
+    key_terms: dict[str, str] = Field(
+        description="Key financial/legal terms extracted as key-value pairs, e.g. rent amount, lease term, purchase price, interest rate. Only include terms actually present."
+    )
+    chunks: list[SemanticChunk] = Field(
+        description="The document text split into semantically meaningful chunks for embedding. "
+        "Each chunk should cover one coherent topic, section, or clause (target ~300-500 words each). "
+        "Prefer natural boundaries: section headings, clause breaks, topic shifts. "
+        "Every chunk must be self-contained enough to be useful when retrieved independently."
     )
 
 
@@ -72,6 +110,30 @@ class TextAnalysis(BaseModel):
     incompleteness_reasons: list[str] = Field(
         description="List of specific reasons the document is incomplete, empty if complete."
     )
+    summary: str = Field(
+        description="A concise 2-4 sentence summary of the document's content and purpose."
+    )
+    expiry_date: str | None = Field(
+        description="Expiry, termination, or end date found in the document (ISO 8601 format e.g. 2025-12-31), or null if none."
+    )
+    has_signature: bool = Field(
+        description="Whether the document mentions or contains signatures."
+    )
+    has_seal: bool = Field(
+        description="Whether the document mentions or contains official seals, stamps, or notary marks."
+    )
+    parties: list[str] = Field(
+        description="Names of all parties, companies, or entities mentioned as signatories or principals in the document."
+    )
+    key_terms: dict[str, str] = Field(
+        description="Key financial/legal terms extracted as key-value pairs, e.g. rent amount, lease term, purchase price, interest rate. Only include terms actually present."
+    )
+    chunks: list[SemanticChunk] = Field(
+        description="The document text split into semantically meaningful chunks for embedding. "
+        "Each chunk should cover one coherent topic, section, or clause (target ~300-500 words each). "
+        "Prefer natural boundaries: section headings, clause breaks, topic shifts. "
+        "Every chunk must be self-contained enough to be useful when retrieved independently."
+    )
 
 
 # ── Result dataclass ────────────────────────────────────────────────────────
@@ -86,6 +148,13 @@ class ProcessingResult:
     is_incomplete: bool = False
     incompleteness_reasons: list[str] = field(default_factory=list)
     is_empty: bool = False
+    summary: str = ""
+    expiry_date: str | None = None
+    has_signature: bool = False
+    has_seal: bool = False
+    parties: list[str] = field(default_factory=list)
+    key_terms: dict[str, str] = field(default_factory=dict)
+    chunks: list[dict] = field(default_factory=list)
     error: str | None = None
 
 
@@ -106,7 +175,9 @@ def _build_categories_block(categories: list[dict]) -> str:
 
 _SYSTEM_INSTRUCTION = (
     "You are a document analysis expert for commercial real estate data rooms. "
-    "You analyze documents to extract text, classify them into categories, and check for completeness."
+    "You analyze documents of all types — PDFs, images, spreadsheets, presentations, "
+    "text files, and office documents — to extract text, classify them into categories, "
+    "assess completeness, extract key metadata, and produce semantically meaningful chunks for retrieval."
 )
 
 
@@ -127,6 +198,17 @@ Perform ALL of the following tasks in a single pass:
    - Poor scan quality making text unreadable
    - Missing pages (e.g. page numbering gaps)
    - Draft watermarks without final version
+4. **Summary**: Write a concise 2-4 sentence summary of the document's content and purpose.
+5. **Expiry / Termination Date**: If the document contains an expiry date, termination date, or end date, extract it in ISO 8601 format (YYYY-MM-DD). Return null if none found.
+6. **Signatures & Seals**: Indicate whether the document contains handwritten or digital signatures, and whether it contains official seals, stamps, or notary marks.
+7. **Parties**: List the names of all parties, companies, or entities mentioned as signatories or principals.
+8. **Key Terms**: Extract key financial and legal terms as key-value pairs (e.g. "rent_amount": "$5,000/month", "lease_term": "5 years"). Only include terms actually present in the document.
+9. **Semantic Chunking**: Split the document into semantically meaningful chunks for use in search and retrieval.
+   - Each chunk should cover ONE coherent topic, section, clause, or logical unit (target ~300-500 words each).
+   - Use natural boundaries: section headings, clause breaks, topic shifts, exhibit separators.
+   - Give each chunk a short descriptive title and a topic label.
+   - Each chunk must be self-contained — if retrieved on its own, a reader should understand its meaning without needing surrounding context.
+   - Include all document text across the chunks; do not skip content.
 
 Return your analysis as structured JSON."""
 
@@ -146,6 +228,17 @@ The text below was extracted from a non-PDF file. Perform the following tasks:
    - Missing sections or abruptly ending content
    - Placeholder text or template markers
    - References to attachments or exhibits not present
+3. **Summary**: Write a concise 2-4 sentence summary of the document's content and purpose.
+4. **Expiry / Termination Date**: If the document contains an expiry date, termination date, or end date, extract it in ISO 8601 format (YYYY-MM-DD). Return null if none found.
+5. **Signatures & Seals**: Indicate whether the document mentions or contains signatures, and whether it mentions or contains official seals, stamps, or notary marks.
+6. **Parties**: List the names of all parties, companies, or entities mentioned as signatories or principals.
+7. **Key Terms**: Extract key financial and legal terms as key-value pairs (e.g. "rent_amount": "$5,000/month", "lease_term": "5 years"). Only include terms actually present.
+8. **Semantic Chunking**: Split the document text into semantically meaningful chunks for use in search and retrieval.
+   - Each chunk should cover ONE coherent topic, section, clause, or logical unit (target ~300-500 words each).
+   - Use natural boundaries: section headings, clause breaks, topic shifts.
+   - Give each chunk a short descriptive title and a topic label.
+   - Each chunk must be self-contained — if retrieved on its own, a reader should understand its meaning without needing surrounding context.
+   - Include all document text across the chunks; do not skip content.
 
 Document text:
 ---
@@ -170,9 +263,10 @@ def process_document(document: dict, company_categories: list[dict]) -> Processi
     """Process a single document through Gemini.
 
     Routes to the appropriate path based on file type and size:
-    - Path A: PDF/images → Gemini sees the file directly (extraction + classification + completeness)
-    - Path B: DOCX/XLSX/etc → local extraction, then Gemini for classification + completeness
-    - Path C: Large PDFs → split into segments, extract per segment, then classify merged text
+    - Path A: PDF/images → Gemini sees the file directly (extraction + classification + everything)
+    - Path B: Office files (DOCX/XLSX/PPTX) → convert to PDF, then Gemini sees layout/tables/images
+    - Path C: Text files (TXT/CSV/HTML/EML) → send to Gemini as native text Parts
+    - Path D: Large PDFs (>50 MB) → split into segments, extract per segment, then classify merged text
 
     Args:
         document: Dict with keys: id, filename, file_extension, file_size, storage_path
@@ -183,15 +277,20 @@ def process_document(document: dict, company_categories: list[dict]) -> Processi
     filename = document.get("filename", "unknown")
 
     try:
-        if ext in ("pdf",):
+        if ext == "pdf":
             if file_size <= MAX_PDF_SIZE:
                 return _process_pdf_direct(document, company_categories)
             else:
                 return _process_pdf_large(document, company_categories)
-        elif ext in ("png", "jpg", "jpeg", "gif", "tiff", "bmp", "webp"):
+        elif ext in ("png", "jpg", "jpeg", "gif", "webp", "heic", "heif"):
             return _process_image_direct(document, company_categories)
-        elif ext in ("docx", "xlsx", "pptx", "txt", "csv", "eml"):
-            return _process_text_file(document, company_categories)
+        elif ext in ("tiff", "bmp"):
+            # TIFF/BMP not natively supported by Gemini — convert to PDF
+            return _process_office_as_pdf(document, company_categories)
+        elif ext in ("docx", "xlsx", "pptx"):
+            return _process_office_as_pdf(document, company_categories)
+        elif ext in ("txt", "csv", "html", "htm", "xml", "rtf", "md", "json", "eml"):
+            return _process_text_direct(document, company_categories)
         else:
             return ProcessingResult(
                 category_key="other",
@@ -236,6 +335,13 @@ def _process_pdf_direct(document: dict, categories: list[dict]) -> ProcessingRes
         classification_reasoning=analysis.classification_reasoning,
         is_incomplete=analysis.is_incomplete,
         incompleteness_reasons=analysis.incompleteness_reasons,
+        summary=analysis.summary,
+        expiry_date=analysis.expiry_date,
+        has_signature=analysis.has_signature,
+        has_seal=analysis.has_seal,
+        parties=analysis.parties,
+        key_terms=analysis.key_terms,
+        chunks=[c.model_dump() for c in analysis.chunks],
     )
 
 
@@ -250,8 +356,8 @@ def _process_image_direct(document: dict, categories: list[dict]) -> ProcessingR
     ext = (document.get("file_extension") or "").lower().lstrip(".")
     mime_map = {
         "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-        "gif": "image/gif", "tiff": "image/tiff", "bmp": "image/bmp",
-        "webp": "image/webp",
+        "gif": "image/gif", "webp": "image/webp",
+        "heic": "image/heic", "heif": "image/heif",
     }
     mime_type = mime_map.get(ext, "application/octet-stream")
 
@@ -280,19 +386,128 @@ def _process_image_direct(document: dict, categories: list[dict]) -> ProcessingR
         classification_reasoning=analysis.classification_reasoning,
         is_incomplete=analysis.is_incomplete,
         incompleteness_reasons=analysis.incompleteness_reasons,
+        summary=analysis.summary,
+        expiry_date=analysis.expiry_date,
+        has_signature=analysis.has_signature,
+        has_seal=analysis.has_seal,
+        parties=analysis.parties,
+        key_terms=analysis.key_terms,
+        chunks=[c.model_dump() for c in analysis.chunks],
     )
 
 
-# ── Path B: Text-based files (DOCX/XLSX/PPTX/TXT/CSV/EML) ──────────────────
+# ── Path B: Office files → PDF → Gemini ──────────────────────────────────────
 
 
-def _process_text_file(document: dict, categories: list[dict]) -> ProcessingResult:
-    """Extract text locally, then send to Gemini for classification + completeness."""
+def _convert_to_pdf(file_bytes: bytes, ext: str) -> bytes | None:
+    """Convert an office/image document to PDF for Gemini processing.
+
+    Tries LibreOffice headless first (preserves tables, formatting, images),
+    then falls back to a text-based PDF via fpdf2.
+    """
+    # --- Try LibreOffice headless (best fidelity) ---
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, f"input.{ext}")
+            with open(input_path, "wb") as f:
+                f.write(file_bytes)
+
+            subprocess.run(
+                [
+                    "soffice", "--headless", "--norestore",
+                    "--convert-to", "pdf", "--outdir", tmpdir, input_path,
+                ],
+                capture_output=True,
+                timeout=120,
+                check=True,
+            )
+
+            output_path = os.path.join(tmpdir, "input.pdf")
+            if os.path.exists(output_path):
+                with open(output_path, "rb") as f:
+                    return f.read()
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        logger.debug(
+            "LibreOffice not available or failed, falling back to text-based PDF for .%s", ext
+        )
+
+    # --- Fallback: text-based PDF via fpdf2 ---
+    try:
+        from fpdf import FPDF
+
+        text = local_extract_text(file_bytes, ext)
+        if not text or not text.strip():
+            return None
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=10)
+        # fpdf2 built-in fonts support Latin-1; replace unsupported chars
+        clean_text = text.encode("latin-1", errors="replace").decode("latin-1")
+        pdf.multi_cell(w=0, h=5, text=clean_text)
+        return bytes(pdf.output())
+    except Exception as exc:
+        logger.warning("Failed to create text-based PDF for .%s: %s", ext, exc)
+        return None
+
+
+def _process_office_as_pdf(document: dict, categories: list[dict]) -> ProcessingResult:
+    """Convert office document (or unsupported image) to PDF, then send to Gemini.
+
+    Falls back to text extraction path if PDF conversion fails entirely.
+    """
     sb = get_supabase()
     file_bytes = sb.storage.from_("dataroom-files").download(document["storage_path"])
     ext = (document.get("file_extension") or "").lower().lstrip(".")
 
-    # Local text extraction
+    pdf_bytes = _convert_to_pdf(file_bytes, ext)
+    if not pdf_bytes:
+        # Conversion failed — fall back to text extraction + TextAnalysis
+        logger.warning(
+            "PDF conversion failed for %s, falling back to text extraction", document["filename"]
+        )
+        return _process_text_fallback(document, categories, file_bytes, ext)
+
+    client = _get_client()
+    categories_block = _build_categories_block(categories)
+    prompt = _build_full_prompt(categories_block, document["filename"])
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[
+            types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+            prompt,
+        ],
+        config={
+            "system_instruction": _SYSTEM_INSTRUCTION,
+            "response_mime_type": "application/json",
+            "response_json_schema": DocumentAnalysis.model_json_schema(),
+        },
+    )
+
+    analysis = DocumentAnalysis.model_validate_json(response.text)
+    return ProcessingResult(
+        extracted_text=analysis.extracted_text,
+        category_key=analysis.category_key,
+        classification_confidence=analysis.classification_confidence,
+        classification_reasoning=analysis.classification_reasoning,
+        is_incomplete=analysis.is_incomplete,
+        incompleteness_reasons=analysis.incompleteness_reasons,
+        summary=analysis.summary,
+        expiry_date=analysis.expiry_date,
+        has_signature=analysis.has_signature,
+        has_seal=analysis.has_seal,
+        parties=analysis.parties,
+        key_terms=analysis.key_terms,
+        chunks=[c.model_dump() for c in analysis.chunks],
+    )
+
+
+def _process_text_fallback(
+    document: dict, categories: list[dict], file_bytes: bytes, ext: str,
+) -> ProcessingResult:
+    """Last-resort path: extract text locally, send to Gemini with TextAnalysis."""
     extracted_text = local_extract_text(file_bytes, ext)
     if not extracted_text.strip():
         return ProcessingResult(
@@ -325,6 +540,91 @@ def _process_text_file(document: dict, categories: list[dict]) -> ProcessingResu
         classification_reasoning=analysis.classification_reasoning,
         is_incomplete=analysis.is_incomplete,
         incompleteness_reasons=analysis.incompleteness_reasons,
+        summary=analysis.summary,
+        expiry_date=analysis.expiry_date,
+        has_signature=analysis.has_signature,
+        has_seal=analysis.has_seal,
+        parties=analysis.parties,
+        key_terms=analysis.key_terms,
+        chunks=[c.model_dump() for c in analysis.chunks],
+    )
+
+
+# ── Path C: Text files → Gemini native ──────────────────────────────────────
+
+# Gemini natively supports these MIME types as inline Parts
+_TEXT_MIME_MAP: dict[str, str] = {
+    "txt": "text/plain",
+    "csv": "text/csv",
+    "html": "text/html",
+    "htm": "text/html",
+    "xml": "text/xml",
+    "rtf": "text/rtf",
+    "md": "text/plain",
+    "json": "application/json",
+    "eml": "text/plain",  # Gemini doesn't support message/rfc822; send as text
+}
+
+
+def _process_text_direct(document: dict, categories: list[dict]) -> ProcessingResult:
+    """Send text-based files directly to Gemini as native file Parts.
+
+    Gemini natively handles text/plain, text/csv, text/html, text/xml, etc.
+    Uses DocumentAnalysis so Gemini performs extraction + classification + everything.
+    """
+    sb = get_supabase()
+    file_bytes = sb.storage.from_("dataroom-files").download(document["storage_path"])
+    ext = (document.get("file_extension") or "").lower().lstrip(".")
+
+    # Quick empty check
+    try:
+        text_content = file_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        text_content = ""
+
+    if not text_content.strip():
+        return ProcessingResult(
+            extracted_text="",
+            category_key="other",
+            classification_confidence=0.0,
+            classification_reasoning="File is empty.",
+            is_empty=True,
+        )
+
+    mime_type = _TEXT_MIME_MAP.get(ext, "text/plain")
+
+    client = _get_client()
+    categories_block = _build_categories_block(categories)
+    prompt = _build_full_prompt(categories_block, document["filename"])
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[
+            types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+            prompt,
+        ],
+        config={
+            "system_instruction": _SYSTEM_INSTRUCTION,
+            "response_mime_type": "application/json",
+            "response_json_schema": DocumentAnalysis.model_json_schema(),
+        },
+    )
+
+    analysis = DocumentAnalysis.model_validate_json(response.text)
+    return ProcessingResult(
+        extracted_text=analysis.extracted_text,
+        category_key=analysis.category_key,
+        classification_confidence=analysis.classification_confidence,
+        classification_reasoning=analysis.classification_reasoning,
+        is_incomplete=analysis.is_incomplete,
+        incompleteness_reasons=analysis.incompleteness_reasons,
+        summary=analysis.summary,
+        expiry_date=analysis.expiry_date,
+        has_signature=analysis.has_signature,
+        has_seal=analysis.has_seal,
+        parties=analysis.parties,
+        key_terms=analysis.key_terms,
+        chunks=[c.model_dump() for c in analysis.chunks],
     )
 
 
@@ -468,7 +768,91 @@ def _process_pdf_large(document: dict, categories: list[dict]) -> ProcessingResu
         classification_reasoning=analysis.classification_reasoning,
         is_incomplete=analysis.is_incomplete,
         incompleteness_reasons=analysis.incompleteness_reasons,
+        summary=analysis.summary,
+        expiry_date=analysis.expiry_date,
+        has_signature=analysis.has_signature,
+        has_seal=analysis.has_seal,
+        parties=analysis.parties,
+        key_terms=analysis.key_terms,
+        chunks=[c.model_dump() for c in analysis.chunks],
     )
+
+
+# ── Text chunking for embeddings ─────────────────────────────────────────────
+
+CHUNK_SIZE = 512  # target tokens per chunk (approx 4 chars per token)
+CHUNK_OVERLAP = 50  # overlap tokens between consecutive chunks
+
+
+def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[dict]:
+    """Split text into overlapping chunks sized for embedding models.
+
+    Uses paragraph boundaries when possible, falling back to sentence
+    boundaries, then hard character splits. Returns a list of dicts:
+    [{"content": str, "token_count": int, "chunk_index": int}, ...]
+    """
+    if not text or not text.strip():
+        return []
+
+    # Approximate chars per token (conservative for English text)
+    chars_per_token = 4
+    target_chars = chunk_size * chars_per_token
+    overlap_chars = overlap * chars_per_token
+
+    # Split into paragraphs first
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
+    chunks: list[dict] = []
+    current = ""
+    idx = 0
+
+    for para in paragraphs:
+        # If adding this paragraph exceeds target, flush current chunk
+        if current and len(current) + len(para) + 2 > target_chars:
+            chunks.append({
+                "content": current.strip(),
+                "token_count": max(1, len(current.strip()) // chars_per_token),
+                "chunk_index": idx,
+            })
+            idx += 1
+            # Keep overlap from the end of current chunk
+            if overlap_chars > 0 and len(current) > overlap_chars:
+                current = current[-overlap_chars:] + "\n\n" + para
+            else:
+                current = para
+        else:
+            current = (current + "\n\n" + para) if current else para
+
+    # Flush remaining text
+    if current.strip():
+        chunks.append({
+            "content": current.strip(),
+            "token_count": max(1, len(current.strip()) // chars_per_token),
+            "chunk_index": idx,
+        })
+
+    # Handle single very large paragraphs by splitting on hard boundaries
+    final_chunks: list[dict] = []
+    final_idx = 0
+    for chunk in chunks:
+        content = chunk["content"]
+        if len(content) > target_chars * 2:
+            # Hard split
+            for start in range(0, len(content), target_chars - overlap_chars):
+                piece = content[start:start + target_chars]
+                if piece.strip():
+                    final_chunks.append({
+                        "content": piece.strip(),
+                        "token_count": max(1, len(piece.strip()) // chars_per_token),
+                        "chunk_index": final_idx,
+                    })
+                    final_idx += 1
+        else:
+            chunk["chunk_index"] = final_idx
+            final_chunks.append(chunk)
+            final_idx += 1
+
+    return final_chunks
 
 
 # ── Batch processing for a deal ─────────────────────────────────────────────
@@ -550,10 +934,65 @@ def process_deal_documents(deal_id: str) -> int:
             "is_incomplete": result.is_incomplete,
             "incompleteness_reasons": result.incompleteness_reasons or None,
             "is_empty": result.is_empty,
+            "summary": result.summary or None,
+            "expiry_date": result.expiry_date,
+            "has_signature": result.has_signature,
+            "has_seal": result.has_seal,
+            "parties": result.parties or None,
+            "key_terms": result.key_terms or None,
             "processing_status": "completed",
             "classified_at": datetime.now(timezone.utc).isoformat(),
         }
         sb.table("documents").update(update_data).eq("id", doc["id"]).execute()
+
+        # Create text chunks for embedding / RAG
+        # Prefer Gemini's semantic chunks; fall back to naive paragraph splitting
+        if result.extracted_text and result.extracted_text.strip():
+            if result.chunks:
+                # Gemini produced semantic chunks — use them
+                chunk_rows = [
+                    {
+                        "document_id": doc["id"],
+                        "deal_id": deal_id,
+                        "chunk_index": idx,
+                        "content": c["content"],
+                        "token_count": max(1, len(c["content"]) // 4),
+                        "metadata": {
+                            "filename": doc.get("filename"),
+                            "category": result.category_key,
+                            "title": c.get("title", ""),
+                            "topic": c.get("topic", ""),
+                        },
+                    }
+                    for idx, c in enumerate(result.chunks)
+                ]
+            else:
+                # Fallback: naive paragraph-based splitting
+                naive = _chunk_text(result.extracted_text)
+                chunk_rows = [
+                    {
+                        "document_id": doc["id"],
+                        "deal_id": deal_id,
+                        "chunk_index": c["chunk_index"],
+                        "content": c["content"],
+                        "token_count": c["token_count"],
+                        "metadata": {
+                            "filename": doc.get("filename"),
+                            "category": result.category_key,
+                        },
+                    }
+                    for c in naive
+                ]
+
+            if chunk_rows:
+                # Delete any existing chunks for this document (re-processing)
+                sb.table("document_chunks").delete().eq("document_id", doc["id"]).execute()
+                sb.table("document_chunks").insert(chunk_rows).execute()
+                logger.info(
+                    "Created %d chunks for document %s (semantic=%s)",
+                    len(chunk_rows), doc["id"], bool(result.chunks),
+                )
+
         processed += 1
 
     return processed

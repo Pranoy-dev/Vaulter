@@ -21,6 +21,12 @@ export interface DealDocument {
   is_incomplete: boolean
   incompleteness_reasons: string[] | null
   is_empty: boolean
+  summary: string | null
+  expiry_date: string | null
+  has_signature: boolean
+  has_seal: boolean
+  parties: string[] | null
+  key_terms: Record<string, string> | null
   processing_status: "pending" | "processing" | "completed" | "failed"
   processing_error: string | null
   rag_indexed: boolean

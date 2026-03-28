@@ -41,7 +41,8 @@ router = APIRouter()
 
 ACCEPTED_EXTENSIONS = {
     ".pdf", ".docx", ".xlsx", ".pptx", ".msg", ".eml",
-    ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp",
+    ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp", ".webp", ".heic", ".heif",
+    ".txt", ".csv", ".html", ".htm", ".xml", ".rtf", ".md", ".json",
 }
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024  # 5 GB per deal
 
@@ -58,6 +59,17 @@ _MIME_MAP: dict[str, str] = {
     ".gif":  "image/gif",
     ".tiff": "image/tiff",
     ".bmp":  "image/bmp",
+    ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".txt":  "text/plain",
+    ".csv":  "text/csv",
+    ".html": "text/html",
+    ".htm":  "text/html",
+    ".xml":  "text/xml",
+    ".rtf":  "text/rtf",
+    ".md":   "text/plain",
+    ".json": "application/json",
 }
 
 

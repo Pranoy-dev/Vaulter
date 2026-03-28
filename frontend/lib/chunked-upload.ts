@@ -16,7 +16,8 @@ type GetToken = ReturnType<typeof useAuth>["getToken"]
 
 export const ACCEPTED_EXTENSIONS = new Set([
   ".pdf", ".docx", ".xlsx", ".pptx", ".msg", ".eml",
-  ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp",
+  ".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp", ".webp", ".heic", ".heif",
+  ".txt", ".csv", ".html", ".htm", ".xml", ".rtf", ".md", ".json",
 ])
 
 export function isSupported(relativePath: string): boolean {

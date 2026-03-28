@@ -142,10 +142,17 @@ class Document(Base):
     rag_indexed = Column(Boolean, nullable=False, default=False)
     rag_indexed_at = Column(DateTime(timezone=True), nullable=True)
     classified_at = Column(DateTime(timezone=True), nullable=True)
+    summary = Column(Text, nullable=True)
+    expiry_date = Column(Text, nullable=True)
+    has_signature = Column(Boolean, nullable=False, default=False)
+    has_seal = Column(Boolean, nullable=False, default=False)
+    key_terms = Column(JSONB, nullable=True)
+    parties = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     deal = relationship("Deal", back_populates="documents")
     extraction_segments = relationship("ExtractionSegment", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_documents_deal", "deal_id"),
@@ -175,6 +182,30 @@ class ExtractionSegment(Base):
 
     __table_args__ = (
         Index("idx_extraction_segments_doc", "document_id"),
+    )
+
+
+# ── DOCUMENT CHUNKS (embeddings + chat) ──────────────────────────────────────
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    deal_id = Column(UUID(as_uuid=True), ForeignKey("deals.id", ondelete="CASCADE"), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    token_count = Column(Integer, nullable=False, default=0)
+    metadata = Column(JSONB, nullable=True)
+    # embedding column is vector(768), managed via raw SQL / pgvector
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    document = relationship("Document", back_populates="chunks")
+
+    __table_args__ = (
+        Index("idx_chunks_document", "document_id"),
+        Index("idx_chunks_deal", "deal_id"),
+        Index("idx_chunks_doc_order", "document_id", "chunk_index"),
     )
 
 
