@@ -35,6 +35,7 @@ export interface DuplicateMember {
   is_canonical: boolean
   filename: string | null
   original_path: string | null
+  file_size: number | null
 }
 
 export interface DuplicateGroup {

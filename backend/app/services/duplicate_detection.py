@@ -16,6 +16,11 @@ def detect_duplicates(deal_id: str) -> int:
     Returns the number of duplicate groups created.
     """
     sb = get_supabase()
+
+    # Clear existing duplicate groups for this deal before re-detecting
+    # (prevents stale groups accumulating across multiple processing runs)
+    sb.table("duplicate_groups").delete().eq("deal_id", deal_id).execute()
+
     docs = (
         sb.table("documents")
         .select("id, sha256_hash, filename, file_extension, storage_path, extracted_text")

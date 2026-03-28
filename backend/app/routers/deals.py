@@ -149,7 +149,7 @@ async def list_duplicates(
     for g in groups.data:
         members = (
             sb.table("duplicate_group_members")
-            .select("*, documents(filename, original_path)")
+            .select("*, documents(filename, original_path, file_size)")
             .eq("group_id", g["id"])
             .execute()
         )
@@ -162,6 +162,7 @@ async def list_duplicates(
                 is_canonical=m["is_canonical"],
                 filename=doc_info.get("filename"),
                 original_path=doc_info.get("original_path"),
+                file_size=doc_info.get("file_size"),
             ))
         result.append(DuplicateGroupResponse(
             id=g["id"],
@@ -169,7 +170,8 @@ async def list_duplicates(
             match_type=g["match_type"],
             members=member_list,
         ))
-    # Sort by group size descending
+    # Sort by group size descending, exclude groups with fewer than 2 members
+    result = [g for g in result if len(g.members) >= 2]
     result.sort(key=lambda g: len(g.members), reverse=True)
     return ApiResponse.ok({"groups": result})
 
@@ -242,3 +244,30 @@ async def delete_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_curre
     sb.table("deals").delete().eq("id", str(deal_id)).execute()
 
     return ApiResponse.ok({"deleted": str(deal_id)})
+
+
+# ── Delete Document ──────────────────────────────────────────────────────────
+
+@router.delete("/{deal_id}/documents/{doc_id}", status_code=200)
+async def delete_document(
+    deal_id: uuid.UUID,
+    doc_id: uuid.UUID,
+    clerk_user_id: str = Depends(get_current_user_id),
+):
+    user_id = _resolve_user_id(clerk_user_id)
+    _verify_deal_ownership(deal_id, user_id)
+    sb = get_supabase()
+
+    doc = sb.table("documents").select("storage_path").eq("id", str(doc_id)).eq("deal_id", str(deal_id)).execute()
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    storage_path = doc.data[0].get("storage_path")
+    if storage_path:
+        try:
+            sb.storage.from_("dataroom-files").remove([storage_path])
+        except Exception:
+            pass  # Best-effort; DB delete still proceeds
+
+    sb.table("documents").delete().eq("id", str(doc_id)).execute()
+    return ApiResponse.ok({"deleted": str(doc_id)})

@@ -10,6 +10,13 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { DemoAgentProcessingLog } from "@/features/project-setup/demo-workspace/demo-agent-processing-log"
 import { DEMO_WORKSPACE_TITLE } from "@/features/project-setup/demo-workspace/mock-data"
 import {
@@ -25,7 +32,10 @@ import {
   CheckCircle2,
   ChevronRight,
   Copy,
+  ExternalLink,
+  Eye,
   File as FileIcon,
+  Trash2,
   FilePenLine,
   Folder,
   FolderTree,
@@ -183,7 +193,23 @@ function buildTree(documents: DealDocument[]): TreeNode {
   return root
 }
 
-function TreeNodeRow({ node, depth = 0, showStatus = false }: { node: TreeNode; depth?: number; showStatus?: boolean }) {
+function TreeNodeRow({
+  node,
+  depth = 0,
+  showStatus = false,
+  onPreview,
+  loadingPreviewId,
+  onDelete,
+  deletingId,
+}: {
+  node: TreeNode
+  depth?: number
+  showStatus?: boolean
+  onPreview?: (docId: string, filename: string, ctrlKey: boolean) => void
+  loadingPreviewId?: string | null
+  onDelete?: (docId: string, filename: string) => void
+  deletingId?: string | null
+}) {
   const [open, setOpen] = React.useState(true)
   const hasChildren = Object.keys(node.children).length > 0
   const indent = depth * 16
@@ -213,7 +239,7 @@ function TreeNodeRow({ node, depth = 0, showStatus = false }: { node: TreeNode; 
         {Object.values(node.children)
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((child) => (
-            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} />
+            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} onPreview={onPreview} loadingPreviewId={loadingPreviewId} onDelete={onDelete} deletingId={deletingId} />
           ))}
         {/* Files in this folder */}
         {node.files.map((doc) => (
@@ -227,34 +253,68 @@ function TreeNodeRow({ node, depth = 0, showStatus = false }: { node: TreeNode; 
               : showStatus && doc.classification_confidence > 0
                 ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
                 : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
-            <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
-            {showStatus && (
-              <>
-                {doc.processing_status === "processing" ? (
-                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
-                ) : doc.processing_status === "failed" ? (
-                  <span
-                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                    title={doc.processing_error ?? "Processing failed"}
-                  >Failed</span>
-                ) : doc.is_empty ? (
-                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
-                ) : doc.classification_confidence > 0 ? (
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
-                    {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
-                  </span>
-                ) : (
-                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
-                )}
-                {doc.is_incomplete && (
-                  <span
-                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                    title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
-                  >Incomplete</span>
-                )}
-              </>
+            {onPreview ? (
+              <button
+                type="button"
+                onClick={(e) => onPreview(doc.id, doc.filename, e.ctrlKey || e.metaKey)}
+                disabled={loadingPreviewId === doc.id}
+                className="group min-w-0 flex-1 flex items-center gap-1 text-left hover:text-foreground transition-colors disabled:opacity-50"
+                title="Click to preview · Ctrl+click to open in new tab"
+              >
+                {loadingPreviewId === doc.id
+                  ? <Loader2 className="size-3 shrink-0 animate-spin" />
+                  : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
+                <span className="truncate">{doc.filename}</span>
+              </button>
+            ) : (
+              <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
             )}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="w-16 text-right text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+              {showStatus && (
+                <>
+                  <div className="w-40 flex justify-end">
+                    {doc.processing_status === "processing" ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
+                    ) : doc.processing_status === "failed" ? (
+                      <span
+                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                        title={doc.processing_error ?? "Processing failed"}
+                      >Failed</span>
+                    ) : doc.is_empty ? (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
+                    ) : doc.classification_confidence > 0 ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
+                        {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                    )}
+                  </div>
+                  <div className="w-20 flex justify-end">
+                    {doc.is_incomplete && (
+                      <span
+                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                        title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
+                      >Incomplete</span>
+                    )}
+                  </div>
+                </>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  disabled={deletingId === doc.id}
+                  onClick={() => onDelete(doc.id, doc.filename)}
+                  className="text-muted-foreground/30 hover:text-red-500 transition-colors disabled:opacity-40"
+                  title="Delete file"
+                >
+                  {deletingId === doc.id
+                    ? <Loader2 className="size-3.5 animate-spin" />
+                    : <Trash2 className="size-3.5" />}
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </CollapsibleContent>
@@ -262,21 +322,119 @@ function TreeNodeRow({ node, depth = 0, showStatus = false }: { node: TreeNode; 
   )
 }
 
-function FileStructurePanel({ documents, loading, showStatus = false }: { documents: DealDocument[]; loading: boolean; showStatus?: boolean }) {
+function FileStructurePanel({
+  documents,
+  loading,
+  showStatus = false,
+  dealId,
+  getToken,
+  onDeleted,
+}: {
+  documents: DealDocument[]
+  loading: boolean
+  showStatus?: boolean
+  dealId?: string | null
+  getToken?: () => Promise<string | null>
+  onDeleted?: () => void
+}) {
+  const [previewDoc, setPreviewDoc] = React.useState<{ url: string; title: string } | null>(null)
+  const [loadingPreviewId, setLoadingPreviewId] = React.useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = React.useState<{ id: string; filename: string } | null>(null)
+  const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const [deletedIds, setDeletedIds] = React.useState<Set<string>>(new Set())
+
+  async function handlePreview(docId: string, filename: string, ctrlKey: boolean) {
+    if (!dealId || !getToken) return
+    setLoadingPreviewId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}/download`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) { toast.error("Could not load file"); return }
+      const body = await res.json()
+      const url = body.data?.url
+      if (!url) { toast.error("Could not load file"); return }
+      if (ctrlKey) { window.open(url, "_blank", "noopener,noreferrer") }
+      else { setPreviewDoc({ url, title: filename }) }
+    } finally {
+      setLoadingPreviewId(null)
+    }
+  }
+
+  async function handleDeleteConfirmed() {
+    if (!dealId || !getToken || !confirmDelete) return
+    const { id: docId, filename } = confirmDelete
+    setConfirmDelete(null)
+    setDeletingId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (res.ok) {
+        toast.success(`"${filename}" deleted`)
+        setDeletedIds((prev) => new Set(prev).add(docId))
+        onDeleted?.()
+      } else {
+        toast.error("Failed to delete document")
+      }
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const canPreview = !!(dealId && getToken)
+  const canDelete = !!(dealId && getToken)
+
   if (loading) return <LoadingRows />
-  if (documents.length === 0)
+  const visibleDocs = documents.filter((d) => !deletedIds.has(d.id))
+  if (visibleDocs.length === 0)
     return <EmptyState icon={FolderTree} message="No files yet — upload to see folder structure." />
 
-  const root = buildTree(documents)
+  const root = buildTree(visibleDocs)
   const topLevel = Object.values(root.children).sort((a, b) => a.name.localeCompare(b.name))
-  // If there are root-level files (no folder), show them too
   const rootFiles = root.files
 
   return (
+    <>
+      {/* Confirm delete dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete file?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{confirmDelete?.filename}</span> will be permanently removed.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirmed}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview dialog */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null) }}>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0 overflow-hidden" showCloseButton>
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-2 pr-8">
+              <DialogTitle className="truncate text-sm">{previewDoc?.title}</DialogTitle>
+              <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ExternalLink className="size-3.5" />Open in new tab
+              </a>
+            </div>
+          </DialogHeader>
+          <iframe src={previewDoc?.url} className="w-full border-0" style={{ height: "85vh" }} title={previewDoc?.title} />
+        </DialogContent>
+      </Dialog>
+
     <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
       <div className="divide-y divide-border/20">
         {topLevel.map((node) => (
-          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} />
+          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} />
         ))}
         {rootFiles.map((doc) => (
           <div key={doc.id} className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30">
@@ -285,49 +443,199 @@ function FileStructurePanel({ documents, loading, showStatus = false }: { docume
               : showStatus && doc.classification_confidence > 0
                 ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
                 : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
-            <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
-            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
-            {showStatus && (
-              <>
-                {doc.processing_status === "processing" ? (
-                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
-                ) : doc.processing_status === "failed" ? (
-                  <span
-                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                    title={doc.processing_error ?? "Processing failed"}
-                  >Failed</span>
-                ) : doc.is_empty ? (
-                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
-                ) : doc.classification_confidence > 0 ? (
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
-                    {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
-                  </span>
-                ) : (
-                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
-                )}
-                {doc.is_incomplete && (
-                  <span
-                    className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
-                    title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
-                  >Incomplete</span>
-                )}
-              </>
+            {canPreview ? (
+              <button
+                type="button"
+                onClick={(e) => handlePreview(doc.id, doc.filename, e.ctrlKey || e.metaKey)}
+                disabled={loadingPreviewId === doc.id}
+                className="group min-w-0 flex-1 flex items-center gap-1 text-left hover:text-foreground transition-colors disabled:opacity-50"
+                title="Click to preview · Ctrl+click to open in new tab"
+              >
+                {loadingPreviewId === doc.id ? <Loader2 className="size-3 shrink-0 animate-spin" /> : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
+                <span className="truncate">{doc.filename}</span>
+              </button>
+            ) : (
+              <span className="min-w-0 flex-1 truncate" title={doc.filename}>{doc.filename}</span>
             )}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="w-16 text-right text-[11px] tabular-nums text-muted-foreground/40">{formatBytes(doc.file_size)}</span>
+              {showStatus && (
+                <>
+                  <div className="w-40 flex justify-end">
+                    {doc.processing_status === "processing" ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Analyzing…</span>
+                    ) : doc.processing_status === "failed" ? (
+                      <span
+                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                        title={doc.processing_error ?? "Processing failed"}
+                      >Failed</span>
+                    ) : doc.is_empty ? (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Empty</span>
+                    ) : doc.classification_confidence > 0 ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_COLORS[doc.assigned_category] ?? CATEGORY_COLORS.other}`}>
+                        {CATEGORY_LABELS[doc.assigned_category] ?? doc.assigned_category}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                    )}
+                  </div>
+                  <div className="w-20 flex justify-end">
+                    {doc.is_incomplete && (
+                      <span
+                        className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950/50 dark:text-red-400 cursor-help"
+                        title={doc.incompleteness_reasons?.join(", ") ?? "Incomplete"}
+                      >Incomplete</span>
+                    )}
+                  </div>
+                </>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  disabled={deletingId === doc.id}
+                  onClick={() => setConfirmDelete({ id: doc.id, filename: doc.filename })}
+                  className="text-muted-foreground/30 hover:text-red-500 transition-colors disabled:opacity-40"
+                  title="Delete file"
+                >
+                  {deletingId === doc.id
+                    ? <Loader2 className="size-3.5 animate-spin" />
+                    : <Trash2 className="size-3.5" />}
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
     </div>
+    </>
   )
 }
 
-function DuplicationPanel({ groups, loading }: { groups: DuplicateGroup[]; loading: boolean }) {
+function DuplicationPanel({
+  groups,
+  loading,
+  dealId,
+  getToken,
+  onDeleted,
+}: {
+  groups: DuplicateGroup[]
+  loading: boolean
+  dealId: string | null
+  getToken: () => Promise<string | null>
+  onDeleted: () => void
+}) {
+  const [deleting, setDeleting] = React.useState<string | null>(null)
+  const [confirmDoc, setConfirmDoc] = React.useState<{ id: string; filename: string } | null>(null)
+  const [deletedIds, setDeletedIds] = React.useState<Set<string>>(new Set())
+  const [loadingPreview, setLoadingPreview] = React.useState<string | null>(null)
+  const [preview, setPreview] = React.useState<{ url: string; title: string } | null>(null)
+
+  async function fetchSignedUrl(docId: string): Promise<string | null> {
+    if (!dealId) return null
+    const token = await getToken()
+    if (!token) return null
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}/download`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!res.ok) return null
+    const body = await res.json()
+    return body.data?.url ?? null
+  }
+
+  async function handleFileClick(e: React.MouseEvent, m: { document_id: string; filename: string | null }) {
+    setLoadingPreview(m.document_id)
+    try {
+      const url = await fetchSignedUrl(m.document_id)
+      if (!url) { toast.error("Could not load file"); return }
+      if (e.ctrlKey || e.metaKey) {
+        window.open(url, "_blank", "noopener,noreferrer")
+      } else {
+        setPreview({ url, title: m.filename ?? "Preview" })
+      }
+    } finally {
+      setLoadingPreview(null)
+    }
+  }
+
+  async function handleDelete() {
+    if (!dealId || !confirmDoc) return
+    const { id: docId, filename } = confirmDoc
+    setConfirmDoc(null)
+    setDeleting(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (res.ok) {
+        toast.success(`"${filename}" deleted`)
+        setDeletedIds((prev) => new Set(prev).add(docId))
+        onDeleted()
+      } else {
+        toast.error("Failed to delete document")
+      }
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   if (loading) return <LoadingRows />
   if (groups.length === 0)
     return <EmptyState icon={Copy} message="No duplicates detected yet." />
 
+  const visibleGroups = groups
+    .map((g) => ({ ...g, members: g.members.filter((m) => !deletedIds.has(m.document_id)) }))
+    .filter((g) => g.members.length >= 2)
+
   return (
-    <div className="space-y-2 pr-1">
-        {groups.map((group) => (
+    <>
+      {/* Confirm delete dialog */}
+      <Dialog open={!!confirmDoc} onOpenChange={(open) => { if (!open) setConfirmDoc(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete duplicate?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{confirmDoc?.filename}</span> will be permanently removed.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDoc(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File preview dialog */}
+      <Dialog open={!!preview} onOpenChange={(open) => { if (!open) setPreview(null) }}>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0 overflow-hidden" showCloseButton>
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-2 pr-8">
+              <DialogTitle className="truncate text-sm">{preview?.title}</DialogTitle>
+              <a
+                href={preview?.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="size-3.5" />
+                Open in new tab
+              </a>
+            </div>
+          </DialogHeader>
+          <iframe
+            src={preview?.url}
+            className="w-full border-0"
+            style={{ height: "85vh" }}
+            title={preview?.title}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-2 pr-1">
+        {visibleGroups.map((group) => (
           <div key={group.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
             <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
               <Copy className="size-3.5 shrink-0 text-muted-foreground" />
@@ -349,18 +657,45 @@ function DuplicationPanel({ groups, loading }: { groups: DuplicateGroup[]; loadi
                     ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
                     : <FileIcon className="size-3 shrink-0 text-muted-foreground/50" />
                   }
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={m.original_path ?? ""}>
-                    {m.filename ?? m.original_path ?? "Unknown"}
-                  </span>
-                  {m.is_canonical && (
-                    <span className="shrink-0 text-[11px] text-green-600">canonical</span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => handleFileClick(e, m)}
+                    disabled={loadingPreview === m.document_id}
+                    className="group min-w-0 flex-1 flex items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                    title="Click to preview · Ctrl+click to open in new tab"
+                  >
+                    {loadingPreview === m.document_id
+                      ? <Loader2 className="size-3 shrink-0 animate-spin" />
+                      : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" />}
+                    <span className="truncate">{m.filename ?? m.original_path ?? "Unknown"}</span>
+                  </button>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="w-16 text-right text-[11px] tabular-nums text-muted-foreground/40">
+                      {m.file_size != null ? formatBytes(m.file_size) : ""}
+                    </span>
+                    {m.is_canonical ? (
+                      <span className="w-16 text-right text-[11px] text-green-600">canonical</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={deleting === m.document_id}
+                        onClick={() => setConfirmDoc({ id: m.document_id, filename: m.filename ?? m.original_path ?? "this file" })}
+                        className="w-16 flex justify-end text-muted-foreground/40 hover:text-red-500 transition-colors disabled:opacity-40"
+                        title="Delete duplicate"
+                      >
+                        {deleting === m.document_id
+                          ? <Loader2 className="size-3.5 animate-spin" />
+                          : <Trash2 className="size-3.5" />}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         ))}
       </div>
+    </>
   )
 }
 
@@ -434,8 +769,9 @@ function ClassificationPanel({
     )
 
   // Only count documents that have actually been classified (confidence > 0)
-  const classifiedDocs = documents.filter((d) => d.classification_confidence > 0)
-  const unclassifiedDocs = documents.filter((d) => d.classification_confidence <= 0)
+  // Docs that are empty or incomplete are treated as unclassified regardless of confidence
+  const classifiedDocs = documents.filter((d) => d.classification_confidence > 0 && !d.is_empty && !d.is_incomplete)
+  const unclassifiedDocs = documents.filter((d) => d.classification_confidence <= 0 || d.is_empty || d.is_incomplete)
   const unclassifiedCount = unclassifiedDocs.length
 
   const countByKey = classifiedDocs.reduce<Record<string, number>>((acc, d) => {
@@ -514,7 +850,7 @@ function ClassificationPanel({
       )}
 
       {/* Classification cards grid */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {active.map((clf) => {
           const count = countByKey[clf.key] ?? 0
           const colorClass = CATEGORY_COLORS[clf.key] ?? CATEGORY_COLORS.other
@@ -634,7 +970,7 @@ function ClassificationPanel({
           {filteredDocs.length === 0 ? (
             <EmptyState icon={FolderTree} message="No files in this category yet." />
           ) : (
-            <FileStructurePanel documents={filteredDocs} loading={false} showStatus />
+            <FileStructurePanel documents={filteredDocs} loading={false} showStatus dealId={dealId} getToken={getToken} onDeleted={onProcessed} />
           )}
         </div>
       )}
@@ -769,6 +1105,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
   }, [chatWidth])
 
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const fileInputSingleRef = React.useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = React.useState(false)
   // Show dropzone when no files uploaded yet, or when user explicitly wants to add more
   const [showDropzone, setShowDropzone] = React.useState(true)
@@ -784,6 +1121,57 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
     state: "idle",
   })
   const abortRef = React.useRef<AbortController | null>(null)
+
+  // ── Upload card: document preview & delete ─────────────────────────────────
+  const [uploadPreview, setUploadPreview] = React.useState<{ url: string; title: string } | null>(null)
+  const [uploadLoadingPreviewId, setUploadLoadingPreviewId] = React.useState<string | null>(null)
+  const [uploadConfirmDelete, setUploadConfirmDelete] = React.useState<{ id: string; filename: string } | null>(null)
+  const [uploadDeletingId, setUploadDeletingId] = React.useState<string | null>(null)
+  const [uploadDeletedIds, setUploadDeletedIds] = React.useState<Set<string>>(new Set())
+
+  async function handleUploadPreview(docId: string, filename: string, ctrlKey: boolean) {
+    setUploadLoadingPreviewId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}/download`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) { toast.error("Could not load file"); return }
+      const body = await res.json()
+      const url = body.data?.url
+      if (!url) { toast.error("Could not load file"); return }
+      if (ctrlKey) { window.open(url, "_blank", "noopener,noreferrer") }
+      else { setUploadPreview({ url, title: filename }) }
+    } finally {
+      setUploadLoadingPreviewId(null)
+    }
+  }
+
+  async function handleUploadDeleteConfirmed() {
+    if (!dealId || !uploadConfirmDelete) return
+    const { id: docId, filename } = uploadConfirmDelete
+    setUploadConfirmDelete(null)
+    setUploadDeletingId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (res.ok) {
+        toast.success(`"${filename}" deleted`)
+        setUploadDeletedIds((prev) => new Set(prev).add(docId))
+        dealData.silentRefresh()
+      } else {
+        toast.error("Failed to delete document")
+      }
+    } finally {
+      setUploadDeletingId(null)
+    }
+  }
 
   React.useEffect(() => {
     const input = fileInputRef.current
@@ -879,6 +1267,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
     setUploadProgress({ overall: 0, files: {}, state: "idle" })
     setShowDropzone(true)
     if (fileInputRef.current) fileInputRef.current.value = ""
+    if (fileInputSingleRef.current) fileInputSingleRef.current.value = ""
   }
 
   // Hide dropzone if this project already has files (loaded from sidebar)
@@ -895,6 +1284,33 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/20">
+      {/* Upload card: confirm delete dialog */}
+      <Dialog open={!!uploadConfirmDelete} onOpenChange={(open) => { if (!open) setUploadConfirmDelete(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete file?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{uploadConfirmDelete?.filename}</span> will be permanently removed.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUploadConfirmDelete(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleUploadDeleteConfirmed}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Upload card: file preview dialog */}
+      <Dialog open={!!uploadPreview} onOpenChange={(open) => { if (!open) setUploadPreview(null) }}>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0 overflow-hidden" showCloseButton>
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-2 pr-8">
+              <DialogTitle className="truncate text-sm">{uploadPreview?.title}</DialogTitle>
+              <a href={uploadPreview?.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ExternalLink className="size-3.5" />Open in new tab
+              </a>
+            </div>
+          </DialogHeader>
+          <iframe src={uploadPreview?.url} className="w-full border-0" style={{ height: "85vh" }} title={uploadPreview?.title} />
+        </DialogContent>
+      </Dialog>
       {/* Top navigation bar */}
       <nav className="relative flex shrink-0 items-center border-b border-border/60 bg-background/80 px-3 py-2 backdrop-blur-sm">
         <Button
@@ -942,6 +1358,21 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               >
                 <LayoutGrid aria-hidden />
                 Classification
+                {dealData.documents.length > 0 && (() => {
+                  const classified = dealData.documents.filter((d) => d.classification_confidence > 0 && !d.is_empty && !d.is_incomplete).length
+                  const pct = Math.round((classified / dealData.documents.length) * 100)
+                  return (
+                    <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                      pct === 100
+                        ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                        : pct >= 80
+                          ? "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+                    }`}>
+                      {pct}%
+                    </span>
+                  )
+                })()}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="duplication"
@@ -950,6 +1381,11 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               >
                 <Copy aria-hidden />
                 Duplication
+                {dealData.duplicates.length > 0 && (
+                  <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950/50 dark:text-red-400">
+                    {dealData.duplicates.length}
+                  </span>
+                )}
               </ToggleGroupItem>
               <ToggleGroupItem
                 value="lease-amendment"
@@ -974,6 +1410,14 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               <div className="space-y-3">
                 <input
                   ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={onInputChange}
+                />
+                {/* Single-file picker — no webkitdirectory so individual files can be selected */}
+                <input
+                  ref={fileInputSingleRef}
                   type="file"
                   multiple
                   className="hidden"
@@ -1123,13 +1567,14 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                             </div>
                           </div>
                           {/* Table header */}
-                          <div className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem] items-center gap-x-2 border-b border-border/40 bg-muted/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                          <div className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem_2.5rem] items-center gap-x-2 border-b border-border/40 bg-muted/30 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                             <span />
                             <span>File</span>
                             <span className="text-right">Size</span>
                             <span className="text-center">RAG</span>
                             <span className="text-center">Classification</span>
                             <span className="text-center">Status</span>
+                            <span />
                           </div>
                           {/* File rows */}
                           <div className={docs.length > 10 ? "max-h-[320px] overflow-y-auto" : ""}>
@@ -1139,11 +1584,11 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                                   {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}
                                 </div>
                               ) : (
-                                docs.map((doc) => {
+                                docs.filter((d) => !uploadDeletedIds.has(d.id)).map((doc) => {
                                   const classified = doc.classification_confidence > 0
                                   const ragged = doc.rag_indexed
                                   return (
-                                    <div key={doc.id} className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem] items-center gap-x-2 px-3 py-1.5 text-xs hover:bg-muted/20">
+                                    <div key={doc.id} className="grid grid-cols-[1.5rem_1fr_5rem_7rem_9rem_6rem_2.5rem] items-center gap-x-2 px-3 py-1.5 text-xs hover:bg-muted/20">
                                       {/* Icon */}
                                       <div className="flex items-center justify-center">
                                         {doc.processing_status === "processing"
@@ -1153,10 +1598,19 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                                             : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
                                         }
                                       </div>
-                                      {/* File path */}
-                                      <span className="min-w-0 truncate text-muted-foreground" title={doc.original_path}>
-                                        {doc.original_path}
-                                      </span>
+                                      {/* File path — clickable preview */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleUploadPreview(doc.id, doc.filename, e.ctrlKey || e.metaKey)}
+                                        disabled={uploadLoadingPreviewId === doc.id}
+                                        className="group min-w-0 flex items-center gap-1 text-left text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                                        title="Click to preview · Ctrl+click to open in new tab"
+                                      >
+                                        {uploadLoadingPreviewId === doc.id
+                                          ? <Loader2 className="size-3 shrink-0 animate-spin" />
+                                          : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
+                                        <span className="truncate">{doc.original_path}</span>
+                                      </button>
                                       {/* Size */}
                                       <span className="text-right tabular-nums text-muted-foreground/50">
                                         {formatBytes(doc.file_size)}
@@ -1219,6 +1673,20 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                                           <span className="text-[11px] text-muted-foreground/30">—</span>
                                         )}
                                       </div>
+                                      {/* Delete */}
+                                      <div className="flex justify-center">
+                                        <button
+                                          type="button"
+                                          disabled={uploadDeletingId === doc.id}
+                                          onClick={() => setUploadConfirmDelete({ id: doc.id, filename: doc.filename })}
+                                          className="text-muted-foreground/30 hover:text-red-500 transition-colors disabled:opacity-40"
+                                          title="Delete file"
+                                        >
+                                          {uploadDeletingId === doc.id
+                                            ? <Loader2 className="size-3.5 animate-spin" />
+                                            : <Trash2 className="size-3.5" />}
+                                        </button>
+                                      </div>
                                     </div>
                                   )
                                 })
@@ -1260,11 +1728,31 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     </div>
                     <div className="space-y-1.5">
                       <p className="text-sm font-medium text-foreground/95">
-                        Drag a folder here, or click to browse
+                        Drag files or a folder here
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Folder upload is supported. Large files are uploaded in resumable chunks.
+                        Large files are uploaded in resumable chunks.
                       </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 text-xs"
+                        onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
+                      >
+                        <FolderUp className="size-3.5" />
+                        Browse folder
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 text-xs"
+                        onClick={(e) => { e.stopPropagation(); fileInputSingleRef.current?.click() }}
+                      >
+                        <FileIcon className="size-3.5" />
+                        Browse files
+                      </Button>
                     </div>
                   </div>
                 ) : null}
@@ -1597,7 +2085,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               isDemoWorkspace ? (
                 <DemoDuplicatesPanel />
               ) : (
-                <DuplicationPanel groups={dealData.duplicates} loading={dealData.loading} />
+                <DuplicationPanel
+                    groups={dealData.duplicates}
+                    loading={dealData.loading}
+                    dealId={dealId}
+                    getToken={getToken}
+                    onDeleted={dealData.silentRefresh}
+                  />
               )
             ) : null}
             {section === "lease-amendment" ? (

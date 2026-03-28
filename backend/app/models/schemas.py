@@ -136,6 +136,7 @@ class DuplicateGroupMemberResponse(BaseModel):
     # Joined fields
     filename: str | None = None
     original_path: str | None = None
+    file_size: int | None = None
 
 
 class DuplicateGroupResponse(BaseModel):
