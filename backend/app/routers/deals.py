@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from app.auth import get_current_user_id
 from app.db.client import get_supabase
@@ -271,3 +272,38 @@ async def delete_document(
 
     sb.table("documents").delete().eq("id", str(doc_id)).execute()
     return ApiResponse.ok({"deleted": str(doc_id)})
+
+
+# ── Move Document (rename original_path / virtual folder) ───────────────────
+
+class MoveDocumentBody(BaseModel):
+    new_folder: str  # Target folder path, e.g. "FolderA/SubFolder" or "" for root
+
+
+@router.patch("/{deal_id}/documents/{doc_id}/move", status_code=200)
+async def move_document(
+    deal_id: uuid.UUID,
+    doc_id: uuid.UUID,
+    body: MoveDocumentBody,
+    clerk_user_id: str = Depends(get_current_user_id),
+):
+    user_id = _resolve_user_id(clerk_user_id)
+    _verify_deal_ownership(deal_id, user_id)
+    sb = get_supabase()
+
+    doc = (
+        sb.table("documents")
+        .select("id, filename, original_path")
+        .eq("id", str(doc_id))
+        .eq("deal_id", str(deal_id))
+        .execute()
+    )
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    filename = doc.data[0]["filename"]
+    folder = body.new_folder.strip("/")
+    new_path = f"{folder}/{filename}" if folder else filename
+
+    sb.table("documents").update({"original_path": new_path}).eq("id", str(doc_id)).execute()
+    return ApiResponse.ok({"id": str(doc_id), "original_path": new_path})

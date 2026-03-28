@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Copy,
+  ChevronLeft,
   ExternalLink,
   Eye,
   File as FileIcon,
@@ -190,7 +191,7 @@ interface TreeNode {
   files: DealDocument[]
 }
 
-function buildTree(documents: DealDocument[]): TreeNode {
+function buildTree(documents: DealDocument[], extraFolderPaths: Set<string> = new Set()): TreeNode {
   const root: TreeNode = { name: "", path: "", children: {}, files: [] }
   for (const doc of documents) {
     const parts = doc.original_path.split("/")
@@ -205,6 +206,20 @@ function buildTree(documents: DealDocument[]): TreeNode {
     }
     node.files.push(doc)
   }
+  // Ensure extra (possibly empty) folder paths are represented in the tree
+  for (const folderPath of extraFolderPaths) {
+    if (!folderPath) continue
+    const parts = folderPath.split("/")
+    let node = root
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i]
+      if (!node.children[seg]) {
+        const p = parts.slice(0, i + 1).join("/")
+        node.children[seg] = { name: seg, path: p, children: {}, files: [] }
+      }
+      node = node.children[seg]
+    }
+  }
   return root
 }
 
@@ -216,6 +231,9 @@ function TreeNodeRow({
   loadingPreviewId,
   onDelete,
   deletingId,
+  onMove,
+  movingId,
+  onDeleteFolder,
 }: {
   node: TreeNode
   depth?: number
@@ -224,17 +242,38 @@ function TreeNodeRow({
   loadingPreviewId?: string | null
   onDelete?: (docId: string, filename: string) => void
   deletingId?: string | null
+  onMove?: (docId: string, targetFolder: string) => void
+  movingId?: string | null
+  onDeleteFolder?: (folderPath: string, folderName: string, fileCount: number) => void
 }) {
   const [open, setOpen] = React.useState(true)
+  const [isDragOver, setIsDragOver] = React.useState(false)
   const hasChildren = Object.keys(node.children).length > 0
   const indent = depth * 16
 
+  function countAllFiles(n: TreeNode): number {
+    return n.files.length + Object.values(n.children).reduce((s, c) => s + countAllFiles(c), 0)
+  }
+  const totalFiles = countAllFiles(node)
+
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
+      <div
+        className={`group/folder relative flex items-center transition-colors ${isDragOver ? "bg-primary/10 ring-1 ring-inset ring-primary/30" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault(); setIsDragOver(false)
+          const docId = e.dataTransfer.getData("text/plain")
+          if (docId && onMove) { onMove(docId, node.path); if (!open) setOpen(true) }
+        }}
+      >
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium bg-muted/40 hover:bg-muted/60 transition-colors"
+          className="flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium bg-muted/40 hover:bg-muted/60 transition-colors"
           style={{ paddingLeft: `${8 + indent}px` }}
         >
           <ChevronRight
@@ -244,30 +283,48 @@ function TreeNodeRow({
           />
           <Folder className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-left" title={node.name}>{node.name}</span>
-          <span className="shrink-0 text-[11px] text-muted-foreground/50 tabular-nums">
-            {node.files.length + Object.values(node.children).reduce((s, c) => s + c.files.length, 0)}
-          </span>
+          {totalFiles === 0 ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground/30 italic">empty</span>
+          ) : (
+            <span className="shrink-0 text-[11px] text-muted-foreground/50 tabular-nums">{totalFiles}</span>
+          )}
         </button>
       </CollapsibleTrigger>
+      {onDeleteFolder && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDeleteFolder(node.path, node.name, totalFiles) }}
+          className="shrink-0 rounded p-1 mr-1 text-muted-foreground/30 opacity-0 group-hover/folder:opacity-100 hover:text-red-500 transition-all"
+          title="Delete folder"
+        >
+          <Trash2 className="size-3" />
+        </button>
+      )}
+      </div>
       <CollapsibleContent>
         {/* Sub-folders */}
         {Object.values(node.children)
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((child) => (
-            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} onPreview={onPreview} loadingPreviewId={loadingPreviewId} onDelete={onDelete} deletingId={deletingId} />
+            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} onPreview={onPreview} loadingPreviewId={loadingPreviewId} onDelete={onDelete} deletingId={deletingId} onMove={onMove} movingId={movingId} onDeleteFolder={onDeleteFolder} />
           ))}
         {/* Files in this folder */}
         {node.files.map((doc) => (
           <div
             key={doc.id}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30"
+            draggable
+            onDragStart={(e) => { e.dataTransfer.setData("text/plain", doc.id); e.dataTransfer.effectAllowed = "move" }}
+            className="group/filerow flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30 cursor-default active:opacity-50"
             style={{ paddingLeft: `${8 + indent + 20}px` }}
           >
-            {showStatus && doc.processing_status === "processing"
+            <GripVertical className="size-3.5 shrink-0 text-muted-foreground/20 opacity-0 group-hover/filerow:opacity-100 cursor-grab active:cursor-grabbing transition-opacity" />
+            {movingId === doc.id
               ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
-              : showStatus && doc.classification_confidence > 0
-                ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
-                : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
+              : showStatus && doc.processing_status === "processing"
+                ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+                : showStatus && doc.classification_confidence > 0
+                  ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
+                  : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
             {onPreview ? (
               <button
                 type="button"
@@ -355,6 +412,111 @@ function FileStructurePanel({
   const [confirmDelete, setConfirmDelete] = React.useState<{ id: string; filename: string } | null>(null)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
   const [deletedIds, setDeletedIds] = React.useState<Set<string>>(new Set())
+  const [rootDragOver, setRootDragOver] = React.useState(false)
+  const [localPathOverrides, setLocalPathOverrides] = React.useState<Record<string, string>>({})
+  const [movingId, setMovingId] = React.useState<string | null>(null)
+  const [extraFolderPaths, setExtraFolderPaths] = React.useState<Set<string>>(new Set())
+  const [confirmFolderDelete, setConfirmFolderDelete] = React.useState<{ path: string; name: string; fileCount: number } | null>(null)
+  const [deletingFolder, setDeletingFolder] = React.useState(false)
+
+  // Clear overrides when the parent documents list updates (server confirmed the change)
+  const prevDocsRef = React.useRef(documents)
+  React.useEffect(() => {
+    if (prevDocsRef.current !== documents) {
+      prevDocsRef.current = documents
+      setLocalPathOverrides({})
+      // Keep folders that are now empty so they remain visible as drop targets
+      setExtraFolderPaths((prev) => {
+        const newExtra = new Set<string>()
+        for (const folderPath of prev) {
+          const hasFiles = documents.some((d) => d.original_path.startsWith(folderPath + "/"))
+          if (!hasFiles) newExtra.add(folderPath)
+        }
+        return newExtra
+      })
+    }
+  }, [documents])
+
+  async function handleMove(docId: string, targetFolder: string) {
+    if (!dealId || !getToken) return
+    const doc = documents.find((d) => d.id === docId)
+    if (!doc) return
+    const filename = doc.filename
+    const newPath = targetFolder ? `${targetFolder}/${filename}` : filename
+    // Track source folder so it stays visible even if it becomes empty
+    const currentPath = localPathOverrides[docId] ?? doc.original_path
+    const parts = currentPath.split("/")
+    if (parts.length > 1) {
+      const sourceFolder = parts.slice(0, -1).join("/")
+      setExtraFolderPaths((prev) => new Set([...prev, sourceFolder]))
+    }
+    setMovingId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}/move`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ new_folder: targetFolder }),
+        },
+      )
+      if (res.ok) {
+        // Move confirmed — update path immediately in UI, then trigger background refresh
+        setLocalPathOverrides((prev) => ({ ...prev, [docId]: newPath }))
+        onDeleted?.()
+      } else {
+        toast.error("Failed to move file")
+      }
+    } catch {
+      toast.error("Failed to move file")
+    } finally {
+      setMovingId(null)
+    }
+  }
+
+  function getAllDocIdsInFolder(folderPath: string, docs: typeof visibleDocs): string[] {
+    return docs
+      .filter((d) => d.original_path === folderPath + "/" + d.filename || d.original_path.startsWith(folderPath + "/"))
+      .map((d) => d.id)
+  }
+
+  async function handleFolderDeleteConfirmed() {
+    if (!dealId || !getToken || !confirmFolderDelete) return
+    // Compute visibleDocs inline here so it's available at call time
+    const currentDocs = documents
+      .filter((d) => !deletedIds.has(d.id))
+      .map((d) => localPathOverrides[d.id] !== undefined ? { ...d, original_path: localPathOverrides[d.id] } : d)
+    const docIds = getAllDocIdsInFolder(confirmFolderDelete.path, currentDocs)
+    setConfirmFolderDelete(null)
+    setDeletingFolder(true)
+    try {
+      const token = await getToken()
+      if (!token) return
+      await Promise.all(
+        docIds.map((docId) =>
+          fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+          )
+        )
+      )
+      setDeletedIds((prev) => new Set([...prev, ...docIds]))
+      // Remove the folder from extraFolderPaths too
+      setExtraFolderPaths((prev) => {
+        const next = new Set(prev)
+        next.delete(confirmFolderDelete.path)
+        return next
+      })
+      toast.success(`Folder "${confirmFolderDelete.name}" and ${docIds.length} file${docIds.length !== 1 ? "s" : ""} deleted`)
+      onDeleted?.()
+    } catch {
+      toast.error("Failed to delete folder")
+    } finally {
+      setDeletingFolder(false)
+    }
+  }
 
   async function handlePreview(docId: string, filename: string, ctrlKey: boolean) {
     if (!dealId || !getToken) return
@@ -405,17 +567,39 @@ function FileStructurePanel({
   const canDelete = !!(dealId && getToken)
 
   if (loading) return <LoadingRows />
-  const visibleDocs = documents.filter((d) => !deletedIds.has(d.id))
+  const visibleDocs = documents
+    .filter((d) => !deletedIds.has(d.id))
+    .map((d) => localPathOverrides[d.id] !== undefined ? { ...d, original_path: localPathOverrides[d.id] } : d)
   if (visibleDocs.length === 0)
     return <EmptyState icon={FolderTree} message="No files yet — upload to see folder structure." />
 
-  const root = buildTree(visibleDocs)
+  const root = buildTree(visibleDocs, extraFolderPaths)
   const topLevel = Object.values(root.children).sort((a, b) => a.name.localeCompare(b.name))
   const rootFiles = root.files
 
   return (
     <>
-      {/* Confirm delete dialog */}
+      {/* Confirm folder delete dialog */}
+      <Dialog open={!!confirmFolderDelete} onOpenChange={(open) => { if (!open) setConfirmFolderDelete(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete folder?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Folder <span className="font-medium text-foreground">{confirmFolderDelete?.name}</span> and{" "}
+            {confirmFolderDelete?.fileCount === 0
+              ? "all its contents"
+              : <><span className="font-medium text-foreground">{confirmFolderDelete?.fileCount} file{confirmFolderDelete?.fileCount !== 1 ? "s" : ""}</span> inside it</>}{" "}
+            will be permanently deleted.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmFolderDelete(null)} disabled={deletingFolder}>Cancel</Button>
+            <Button variant="destructive" onClick={handleFolderDeleteConfirmed} disabled={deletingFolder}>
+              {deletingFolder ? <><Loader2 className="size-3.5 animate-spin mr-1" />Deleting…</> : "Delete folder"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm file delete dialog */}
       <Dialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Delete file?</DialogTitle></DialogHeader>
@@ -447,15 +631,38 @@ function FileStructurePanel({
     <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
       <div className="divide-y divide-border/20">
         {topLevel.map((node) => (
-          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} />
+          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} onMove={handleMove} movingId={movingId} onDeleteFolder={canDelete ? (path, name, count) => setConfirmFolderDelete({ path, name, fileCount: count }) : undefined} />
         ))}
+        {/* Root-level drop zone — drop here to move to root */}
+        <div
+          className={`flex items-center gap-1.5 px-3 py-1 text-[11px] transition-colors ${
+            rootDragOver ? "bg-primary/10 ring-1 ring-inset ring-primary/30" : ""
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setRootDragOver(true) }}
+          onDragLeave={() => setRootDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault(); setRootDragOver(false)
+            const docId = e.dataTransfer.getData("text/plain")
+            if (docId) handleMove(docId, "")
+          }}
+        >
+          {rootDragOver && <span className="text-primary/60">Drop here to move to root</span>}
+        </div>
         {rootFiles.map((doc) => (
-          <div key={doc.id} className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30">
-            {showStatus && doc.processing_status === "processing"
+          <div
+            key={doc.id}
+            draggable
+            onDragStart={(e) => { e.dataTransfer.setData("text/plain", doc.id); e.dataTransfer.effectAllowed = "move" }}
+            className="group/filerow flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30 cursor-default active:opacity-50"
+          >
+            <GripVertical className="size-3.5 shrink-0 text-muted-foreground/20 opacity-0 group-hover/filerow:opacity-100 cursor-grab active:cursor-grabbing transition-opacity" />
+            {movingId === doc.id
               ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
-              : showStatus && doc.classification_confidence > 0
-                ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
-                : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
+              : showStatus && doc.processing_status === "processing"
+                ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+                : showStatus && doc.classification_confidence > 0
+                  ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
+                  : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
             {canPreview ? (
               <button
                 type="button"
@@ -757,14 +964,21 @@ function ClassificationPanel({
     setProcessing(true)
     try {
       const token = await getToken()
-      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/process`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/process`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        const msg = body?.detail ?? `Server error (${res.status})`
+        toast.error("Failed to start processing", { description: msg })
+        return
+      }
       toast.success("Processing started", { description: "Per-file progress is visible in the file list below." })
       onProcessed()
-    } catch {
-      toast.error("Failed to start processing")
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error — is the backend running?"
+      toast.error("Failed to start processing", { description: msg })
     } finally {
       setProcessing(false)
     }
@@ -1184,13 +1398,6 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
     }
   }
 
-  React.useEffect(() => {
-    const input = fileInputRef.current
-    if (!input) return
-    input.setAttribute("webkitdirectory", "")
-    input.setAttribute("directory", "")
-  }, [])
-
   /** Convert a FileList (from input or drop) into FileEntry[] preserving relative paths. */
   const filesToEntries = (files: FileList | null): FileEntry[] => {
     if (!files) return []
@@ -1425,6 +1632,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                   multiple
                   className="hidden"
                   onChange={onInputChange}
+                  // @ts-expect-error – non-standard but widely supported folder picker attribute
+                  webkitdirectory=""
                 />
                 {/* Single-file picker — no webkitdirectory so individual files can be selected */}
                 <input
@@ -1587,6 +1796,19 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                 )}
 
                 {/* Dropzone — only shown when nothing is selected yet or upload is idle */}
+                {showDropzone && selectedFiles.length === 0 && dealData.documents.length > 0 && (
+                  <div className="flex items-center gap-2 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowDropzone(false)}
+                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                      Back to files
+                    </button>
+                  </div>
+                )}
+
                 {showDropzone && selectedFiles.length === 0 ? (
                   <div
                     role="button"

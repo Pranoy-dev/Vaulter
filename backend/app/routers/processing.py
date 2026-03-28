@@ -88,7 +88,7 @@ async def _run_pipeline(deal_id: str):
         _running_jobs.pop(deal_id, None)
 
 
-@router.post("/{deal_id}/process", response_model=ProcessingJobResponse)
+@router.post("/{deal_id}/process")
 async def trigger_processing(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
@@ -109,7 +109,10 @@ async def trigger_processing(
     )
     if not job.data:
         raise HTTPException(status_code=400, detail="No processing job found — upload files first")
-    if job.data[0]["status"] == "running":
+    job_row = job.data[0]
+    # Allow re-triggering if the DB says "running" but no active in-memory task exists
+    # (e.g. server was restarted mid-run, leaving a stale "running" state in the DB)
+    if job_row["status"] == "running" and deal_id_str in _running_jobs:
         raise HTTPException(status_code=409, detail="Processing already in progress")
 
     # Reset job if re-running

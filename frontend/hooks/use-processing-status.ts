@@ -4,7 +4,8 @@ import * as React from "react"
 import { useAuth } from "@clerk/nextjs"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
-const POLL_INTERVAL_MS = 2500
+const POLL_INTERVAL_ACTIVE_MS = 5000
+const POLL_INTERVAL_HIDDEN_MS = 15000
 
 export type ProcessingStatus = "pending" | "running" | "completed" | "failed" | null
 export type ProcessingStage =
@@ -68,17 +69,21 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
     loading: false,
   })
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isFetchingRef = React.useRef(false)
+  // Keep a stable ref to getToken so we never need it in effect deps
+  const getTokenRef = React.useRef(getToken)
+  React.useEffect(() => { getTokenRef.current = getToken }, [getToken])
 
   const fetchStatus = React.useCallback(async () => {
-    if (!dealId) return
+    if (!dealId || isFetchingRef.current) return
+    isFetchingRef.current = true
     try {
-      const token = await getToken()
+      const token = await getTokenRef.current()
       if (!token) return
       const res = await fetch(`${BACKEND_URL}/api/deals/${dealId}/process`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.status === 404) {
-        // No job yet — not an error
         setState((s) => ({ ...s, loading: false, status: null }))
         return
       }
@@ -93,10 +98,11 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
         loading: false,
       })
     } catch {
-      // Network hiccup — ignore
       setState((s) => ({ ...s, loading: false }))
+    } finally {
+      isFetchingRef.current = false
     }
-  }, [dealId, getToken])
+  }, [dealId])
 
   React.useEffect(() => {
     if (!dealId) return
@@ -105,16 +111,16 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
     fetchStatus()
 
     const schedule = () => {
+      const interval = document.hidden ? POLL_INTERVAL_HIDDEN_MS : POLL_INTERVAL_ACTIVE_MS
       timerRef.current = setTimeout(async () => {
         await fetchStatus()
-        // Keep polling while job is in-flight
         setState((current) => {
           if (current.status === "running" || current.status === "pending") {
             schedule()
           }
           return current
         })
-      }, POLL_INTERVAL_MS)
+      }, interval)
     }
     schedule()
 
