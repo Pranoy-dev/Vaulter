@@ -33,6 +33,7 @@ import { toast } from "sonner"
 interface Deal {
   id: string
   name: string
+  file_count: number
 }
 
 function DeleteProjectDialog({
@@ -94,7 +95,7 @@ export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   onNewProject?: () => void
-  onOpenDeal?: (id: string, name: string) => void
+  onOpenDeal?: (id: string, name: string, hasFiles: boolean) => void
   selectedDealId?: string | null
   onDealDeleted?: (id: string) => void
   onHome?: () => void
@@ -160,12 +161,15 @@ export function AppSidebar({
           )}
           <SidebarMenu>
             {loading ? (
-              <SidebarMenuItem>
-                <div className="flex items-center gap-2 px-2 py-1.5">
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Loading…</span>
-                </div>
-              </SidebarMenuItem>
+              <>
+                {[1, 2, 3].map((i) => (
+                  <SidebarMenuItem key={i}>
+                    <div className="flex items-center gap-2 px-2 py-2">
+                      <div className="h-2.5 w-2/3 animate-pulse rounded bg-muted-foreground/15" />
+                    </div>
+                  </SidebarMenuItem>
+                ))}
+              </>
             ) : deals.length === 0 ? (
               <SidebarMenuItem>
                 <span className="px-2 py-1.5 text-xs text-muted-foreground">
@@ -183,7 +187,7 @@ export function AppSidebar({
                       <button
                         type="button"
                         className="w-full text-left"
-                        onClick={() => onOpenDeal(deal.id, deal.name)}
+                        onClick={() => onOpenDeal(deal.id, deal.name, (deal.file_count ?? 0) > 0)}
                       >
                         {deal.name}
                       </button>

@@ -28,6 +28,7 @@ import {
 } from "@/features/project-setup/demo-workspace/demo-workspace-panels"
 import {
   ArrowLeft,
+  ArrowRight,
   AlertTriangle,
   Building2,
   CheckCircle2,
@@ -118,10 +119,12 @@ function StatusChatLog({
   uploadProgress,
   processingJob,
   documents,
+  duplicates,
 }: {
   uploadProgress: UploadProgress
   processingJob: ProcessingJobState
   documents: DealDocument[]
+  duplicates: DuplicateGroup[]
 }) {
   const entries: { key: string; text: string; icon: React.ReactNode; accent: string; variant?: "success" | "error" | "info" | "muted" }[] = []
 
@@ -222,6 +225,74 @@ function StatusChatLog({
       accent: "border-green-500/50",
       variant: "success" as const,
     })
+    // Show hash-duplicate results immediately after upload
+    const exactGroups = duplicates.filter((g) => g.match_type === "exact")
+    if (exactGroups.length > 0) {
+      entries.push({
+        key: "dup-header",
+        text: `⚠️ ${exactGroups.length} identical file group${exactGroups.length !== 1 ? "s" : ""} detected`,
+        icon: <AlertTriangle className="size-3.5 text-amber-400" />,
+        accent: "border-amber-500/50",
+        variant: "error" as const,
+      })
+      exactGroups.forEach((g, gi) => {
+        // Group name / label
+        entries.push({
+          key: `dup-group-${gi}`,
+          text: `  ${g.group_name}`,
+          icon: <Copy className="size-3.5 opacity-40" />,
+          accent: "border-transparent",
+        })
+        // Show each member with folder + filename
+        g.members.forEach((m, mi) => {
+          const path = m.original_path ?? m.filename ?? "Unknown"
+          const { folders, filename } = splitPath(path)
+          if (folders.length > 0) {
+            entries.push({
+              key: `dup-group-${gi}-m${mi}-folder`,
+              text: `  📁 ${folders.join(" / ")}`,
+              icon: <FileIcon className="size-3.5 opacity-20" />,
+              accent: "border-transparent",
+            })
+          }
+          entries.push({
+            key: `dup-group-${gi}-m${mi}-file`,
+            text: `  ↳ ${filename}${m.is_canonical ? " (original)" : " (duplicate)"}`,
+            icon: m.is_canonical
+              ? <Shield className="size-3.5 text-green-500/50" />
+              : <Copy className="size-3.5 text-amber-400/60" />,
+            accent: "border-transparent",
+          })
+        })
+      })
+    } else {
+      entries.push({
+        key: "dup-none",
+        text: "✓ No identical files detected",
+        icon: <CheckCircle2 className="size-3.5 text-green-500/50" />,
+        accent: "border-transparent",
+        variant: "success" as const,
+      })
+    }
+    // Next-step hint
+    const exactGroups2 = duplicates.filter((g) => g.match_type === "exact")
+    if (exactGroups2.length > 0) {
+      entries.push({
+        key: "next-hint",
+        text: "↳ Resolve duplicates in the Duplication tab before processing",
+        icon: <ArrowRight className="size-3.5 text-amber-400/70" />,
+        accent: "border-amber-500/30",
+        variant: "error" as const,
+      })
+    } else {
+      entries.push({
+        key: "next-hint",
+        text: "↳ Head to Classification tab and press Process",
+        icon: <ArrowRight className="size-3.5 text-blue-400/70" />,
+        accent: "border-blue-500/30",
+        variant: "info" as const,
+      })
+    }
   } else if (uploadProgress.state === "error") {
     entries.push({ key: "upload-error", text: `Upload failed: ${(uploadProgress as any).error ?? "Unknown error"}`, icon: <AlertTriangle className="size-3.5 text-red-400" />, accent: "border-red-500/50", variant: "error" })
   }
@@ -1781,10 +1852,11 @@ export type ProjectSetupScreenProps = {
   projectTitle: string
   hasCompany: boolean
   isNewProject?: boolean
+  hasFiles?: boolean
   onBack: () => void
 }
 
-export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProject = false, onBack }: ProjectSetupScreenProps) {
+export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProject = false, hasFiles = false, onBack }: ProjectSetupScreenProps) {
   const { getToken } = useAuth()
   const [section, setSection] = React.useState<SetupSection>("upload")
   const [chatOpen, setChatOpen] = React.useState(true)
@@ -1993,7 +2065,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
         return merged
       })
       setShowDropzone(false)
-      dealData.refresh()
+      dealData.silentRefresh()
       toast.success(
         `Upload complete — ${result.filesUploaded} file${result.filesUploaded !== 1 ? "s" : ""} uploaded`,
         result.skippedFiles.length > 0
@@ -2042,13 +2114,30 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
 
   const isUploading = ["initializing", "uploading", "completing"].includes(uploadProgress.state)
 
-  // Show a full-screen loader when opening an existing project (not a fresh new one).
-  // Must be after all hooks.
-  if (!isNewProject && dealData.loading) {
+  // Show a full-screen loader only on the very first load of an existing project that has files.
+  // New projects and projects with no files skip the loader and go straight to the upload tab.
+  const hasLoadedOnce = React.useRef(false)
+  if (!dealData.loading) hasLoadedOnce.current = true
+  if (!isNewProject && dealData.loading && !hasLoadedOnce.current) {
+    // Show full loader for projects with files, subtle skeleton for others (avoids blank flash)
+    if (hasFiles) {
+      return (
+        <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="size-7 animate-spin" />
+          <p className="text-sm">Loading project…</p>
+        </div>
+      )
+    }
     return (
-      <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="size-7 animate-spin" />
-        <p className="text-sm">Loading project…</p>
+      <div className="flex h-full flex-1 flex-col overflow-hidden bg-muted/20">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-3 py-2 md:gap-2.5 md:px-4 md:py-3">
+          <div className="h-8 w-48 animate-pulse rounded-lg bg-muted-foreground/10" />
+          <div className="flex flex-1 items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground/40">
+              <Loader2 className="size-5 animate-spin" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -2118,7 +2207,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
               </header>
               <div className="min-h-0 flex-1">
                 <ProjectSetupAssistant
-                  chatPrepend={isDemoWorkspace ? <DemoAgentProcessingLog /> : <StatusChatLog uploadProgress={uploadProgress} processingJob={processingJob} documents={dealData.documents} />}
+                  chatPrepend={isDemoWorkspace ? <DemoAgentProcessingLog /> : <StatusChatLog uploadProgress={uploadProgress} processingJob={processingJob} documents={dealData.documents} duplicates={dealData.duplicates} />}
                   dealId={dealId}
                   chatDisabled={!isDemoWorkspace && !dealData.documents.some((d) => d.rag_indexed)}
                 />
