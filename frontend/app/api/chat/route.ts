@@ -18,7 +18,7 @@ type ChatContextResult =
       sources: Array<{ filename?: string; category?: string; score: number; document_id: string }>
       condensed_query: string
     }
-  | { ok: false; reason: "auth_expired" | "no_data" | "error" }
+  | { ok: false; reason: "auth_expired" | "no_data" | "error"; detail?: string }
 
 /** Call backend chat/context endpoint — handles history, condensation, deal overview + RAG. */
 async function fetchChatContext(
@@ -41,7 +41,14 @@ async function fetchChatContext(
       }),
     })
     if (res.status === 401 || res.status === 403) return { ok: false, reason: "auth_expired" }
-    if (!res.ok) return { ok: false, reason: "error" }
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`
+      try {
+        const errBody = await res.json()
+        detail = errBody?.detail ?? errBody?.error?.message ?? detail
+      } catch { /* ignore */ }
+      return { ok: false, reason: "error", detail }
+    }
     const body = await res.json()
     const data = body.data
     if (!data?.has_data) return { ok: false, reason: "no_data" }
@@ -52,8 +59,9 @@ async function fetchChatContext(
       sources: data.sources ?? [],
       condensed_query: data.condensed_query,
     }
-  } catch {
-    return { ok: false, reason: "error" }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Network error"
+    return { ok: false, reason: "error", detail }
   }
 }
 
@@ -89,6 +97,19 @@ async function saveMessages(
 export const maxDuration = 30
 
 export async function POST(req: Request) {
+  try {
+    return await _handlePost(req)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected server error"
+    console.error("[chat/route] Unhandled error:", err)
+    return new Response(JSON.stringify({ error: `Chat service error: ${message}` }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+}
+
+async function _handlePost(req: Request) {
   // Extract the Clerk JWT from the incoming Authorization header.
   // AssistantChatTransport sends a fresh token on every request — no stale state.
   const authToken = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? ""
@@ -131,21 +152,28 @@ export async function POST(req: Request) {
         ragNotice =
           "No indexed document data was found for this deal. The files in this data room have not been processed for RAG yet. " +
           "Let the user know that no document data is available and suggest they run AI processing first."
+      } else if (result.reason === "error") {
+        ragNotice =
+          "Document search encountered an error and could not retrieve context for this question. " +
+          (result.detail ? `Error detail: ${result.detail}. ` : "") +
+          "Let the user know that document search is temporarily unavailable, describe the error if present, " +
+          "and suggest they try again or check that the backend is running."
       }
-      // reason === "error": backend unreachable — answer without RAG, no notice
     }
   }
 
   // Prepend RAG context or notice to the system prompt, plus a hard deal-scope instruction
   const dealScopeInstruction = dealId
-    ? "You are an AI assistant for a commercial real estate data room. " +
-      "Your answers must be based on the document excerpts provided below. " +
-      "Rules you must follow:\n" +
-      "1. Base your answers on the provided document excerpts. Do not fabricate facts.\n" +
-      "2. Synthesise and list information found across the provided excerpts (e.g. all party names, all dates). If a specific piece of information genuinely does not appear in any excerpt, say: \"I couldn't find that in the available documents.\"\n" +
-      "3. Do not reference documents from other deals or external sources.\n" +
-      "4. Always cite the source document filename when presenting specific facts.\n" +
-      "5. Do not speculate or fill gaps — only report what the documents state."
+    ? "You are an AI assistant for a commercial real estate data room.\n" +
+      "The context below contains two sections you must use together:\n" +
+      "  - **Data Room Document Inventory**: a structured overview of every file — file type, size, classification, summaries, key terms, parties, expiry dates, and folder structure. Use this for aggregate questions (e.g. 'summarize all documents', 'list all parties', 'what files do we have').\n" +
+      "  - **Retrieved Document Excerpts**: the most relevant raw text chunks from the documents, ranked by relevance. Use these for specific detail questions.\n\n" +
+      "Rules:\n" +
+      "1. Answer using both the inventory overview AND the retrieved excerpts — they are both authoritative context.\n" +
+      "2. For aggregate questions (e.g. 'summarize all documents'), use the summaries in the inventory overview to give a complete answer covering every document.\n" +
+      "3. Always cite the source document filename when presenting specific facts.\n" +
+      "4. Do not fabricate facts or reference documents outside this data room.\n" +
+      "5. Only say 'I couldn't find that in the available documents' if the information is genuinely absent from BOTH the inventory overview AND the retrieved excerpts."
     : ""
 
   const effectiveSystem = [dealScopeInstruction, ragContext || ragNotice, system]
@@ -161,26 +189,53 @@ export async function POST(req: Request) {
         .join(" ")
     : ""
 
-  const result = streamText({
-    model: openai("gpt-4o"),
-    messages: await convertToModelMessages(messages),
-    ...(effectiveSystem ? { system: effectiveSystem } : {}),
-    stopWhen: stepCountIs(10),
-    tools: frontendTools(tools),
-    async onFinish({ text }) {
-      // Persist the exchange to DB for history-aware future queries
-      if (dealId && authToken && activeSessionId && userQueryText && text) {
-        await saveMessages(
-          dealId,
-          authToken,
-          activeSessionId,
-          userQueryText,
-          text,
-          ragSources,
-        )
-      }
-    },
-  })
+  try {
+    const result = streamText({
+      model: openai("gpt-4o"),
+      messages: await convertToModelMessages(messages),
+      ...(effectiveSystem ? { system: effectiveSystem } : {}),
+      stopWhen: stepCountIs(10),
+      tools: frontendTools(tools),
+      async onFinish({ text }) {
+        // Persist the exchange to DB for history-aware future queries
+        if (dealId && authToken && activeSessionId && userQueryText && text) {
+          await saveMessages(
+            dealId,
+            authToken,
+            activeSessionId,
+            userQueryText,
+            text,
+            ragSources,
+          )
+        }
+      },
+    })
 
-  return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse()
+  } catch (err) {
+    // Surface model/network errors back to the UI via the stream error protocol
+    // so assistant-ui renders them inline in the chat thread.
+    const message =
+      err instanceof Error ? err.message : "An unexpected error occurred"
+    const isQuota = message.includes("429") || message.toLowerCase().includes("quota")
+    const isUnavailable =
+      message.includes("503") ||
+      message.toLowerCase().includes("unavailable") ||
+      message.toLowerCase().includes("overloaded")
+    const isNetwork =
+      message.toLowerCase().includes("fetch") ||
+      message.toLowerCase().includes("econnrefused") ||
+      message.toLowerCase().includes("network")
+
+    let friendly = `AI service error: ${message}`
+    if (isQuota) friendly = "Request limit reached. Please wait a moment and try again."
+    else if (isUnavailable) friendly = "The AI model is temporarily unavailable. Please try again shortly."
+    else if (isNetwork) friendly = "Could not reach the AI service. Check your connection and try again."
+
+    console.error("[chat/route] streamText error:", err)
+    return new Response(JSON.stringify({ error: friendly }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 }
