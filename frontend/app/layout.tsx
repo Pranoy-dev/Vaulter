@@ -36,7 +36,7 @@ export default function RootLayout({
             <TooltipProvider>
               {children}
             </TooltipProvider>
-            <Toaster position="bottom-center" richColors closeButton />
+            <Toaster position="bottom-center" richColors closeButton toastOptions={{ classNames: { closeButton: "!left-auto !right-0 !translate-x-1/2 !-translate-y-1/2 !top-1/2" } }} />
           </ThemeProvider>
         </body>
       </html>

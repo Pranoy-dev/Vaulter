@@ -1771,11 +1771,11 @@ function ClassificationPanel({
                   <span className="text-sm font-semibold leading-tight text-muted-foreground">Unclassified</span>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
-                  unclassifiedCount > 0
+                  unclassifiedDocs.length > 0
                     ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
                     : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
                 }`}>
-                  {unclassifiedCount} {unclassifiedCount === 1 ? "file" : "files"}
+                  {unclassifiedDocs.length} {unclassifiedDocs.length === 1 ? "file" : "files"}
                 </span>
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1785,13 +1785,13 @@ function ClassificationPanel({
                 <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      unclassifiedCount > 0 ? "bg-amber-300" : "bg-zinc-200 dark:bg-zinc-700"
+                      unclassifiedDocs.length > 0 ? "bg-amber-300" : "bg-zinc-200 dark:bg-zinc-700"
                     }`}
-                    style={{ width: `${Math.round((unclassifiedCount / documents.length) * 100)}%` }}
+                    style={{ width: `${Math.round((unclassifiedDocs.length / documents.length) * 100)}%` }}
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground/60 tabular-nums">
-                  {Math.round((unclassifiedCount / documents.length) * 100)}% of documents
+                  {Math.round((unclassifiedDocs.length / documents.length) * 100)}% of documents
                 </p>
               </div>
             </button>
