@@ -24,7 +24,9 @@ _running_jobs: dict[str, asyncio.Task] = {}
 
 async def _update_job(deal_id: str, *, status: str | None = None, stage: str | None = None,
                 progress: float | None = None, error: str | None = None,
-                started: bool = False, completed: bool = False):
+                started: bool = False, completed: bool = False,
+                sub_stage: str | None = None, stage_detail: str | None = None,
+                current_file: str | None = None):
     """Update the processing_jobs row and push via Socket.IO."""
     sb = get_supabase()
     update: dict = {}
@@ -49,6 +51,9 @@ async def _update_job(deal_id: str, *, status: str | None = None, stage: str | N
         "current_stage": stage,
         "progress": progress,
         "error_message": error,
+        "sub_stage": sub_stage,
+        "stage_detail": stage_detail,
+        "current_file": current_file,
     })
 
 
@@ -68,8 +73,31 @@ async def _run_pipeline(deal_id: str):
         # Stage 2: Document Processing (Gemini extraction + classification + completeness)
         await _update_job(deal_id, stage="document_processing", progress=0.12)
         from app.services.gemini_processor import process_deal_documents
-        await asyncio.to_thread(process_deal_documents, deal_id)
-        await _update_job(deal_id, progress=0.50)
+
+        loop = asyncio.get_running_loop()
+
+        def _progress_cb(sub_stage: str, current: int, total: int, filename: str = "") -> None:
+            """Sync callback invoked from the processing thread."""
+            # Map sub-stage progress into the 0.12 – 0.50 range
+            if total > 0:
+                frac = current / total
+            else:
+                frac = 0.0
+            overall = 0.12 + frac * 0.38  # 0.12 → 0.50
+            detail = f"{current}/{total}"
+            asyncio.run_coroutine_threadsafe(
+                _update_job(
+                    deal_id,
+                    progress=round(overall, 3),
+                    sub_stage=sub_stage,
+                    stage_detail=detail,
+                    current_file=filename,
+                ),
+                loop,
+            )
+
+        await asyncio.to_thread(process_deal_documents, deal_id, _progress_cb)
+        await _update_job(deal_id, progress=0.50, sub_stage=None, stage_detail=None, current_file=None)
 
         # Stage 3: Duplicate Detection
         await _update_job(deal_id, stage="detecting_duplicates", progress=0.52)

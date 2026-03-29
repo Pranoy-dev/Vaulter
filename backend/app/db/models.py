@@ -196,7 +196,7 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     token_count = Column(Integer, nullable=False, default=0)
-    metadata = Column(JSONB, nullable=True)
+    chunk_metadata = Column("metadata", JSONB, nullable=True)
     # embedding column is vector(768), managed via raw SQL / pgvector
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 

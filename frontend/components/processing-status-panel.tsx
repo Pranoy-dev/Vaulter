@@ -44,14 +44,42 @@ function StageRow({
   label,
   description,
   status,
+  subStage,
+  stageDetail,
+  currentFile,
 }: {
   label: string
   description: string
   status: "idle" | "pending" | "running" | "completed" | "failed"
+  subStage?: string | null
+  stageDetail?: string | null
+  currentFile?: string | null
 }) {
+  const subLabel =
+    status === "running" && subStage
+      ? subStage === "ai_processing"
+        ? "AI Processing"
+        : subStage === "rag_processing"
+          ? "RAG Processing"
+          : null
+      : null
+
+  // Parse "3/10" → { current, total, pct }
+  const counts =
+    status === "running" && stageDetail
+      ? (() => {
+          const m = stageDetail.match(/^(\d+)\/(\d+)/)
+          if (!m) return null
+          const current = parseInt(m[1], 10)
+          const total = parseInt(m[2], 10)
+          const pct = total > 0 ? Math.round((current / total) * 100) : 0
+          return { current, total, pct }
+        })()
+      : null
+
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-      <span className="shrink-0">
+    <div className="flex items-start gap-3 rounded-lg px-3 py-2.5">
+      <span className="shrink-0 mt-0.5">
         {status === "completed" && <CheckCircle2 className="size-4 text-green-600" />}
         {status === "running" && <Loader2 className="size-4 animate-spin text-primary" />}
         {status === "pending" && <CircleDashed className="size-4 text-muted-foreground/50" />}
@@ -59,34 +87,67 @@ function StageRow({
         {status === "failed" && <AlertCircle className="size-4 text-destructive" />}
       </span>
       <div className="min-w-0 flex-1">
-        <p
-          className={`text-xs font-medium ${
-            status === "completed"
-              ? "text-foreground"
-              : status === "running"
+        <div className="flex items-center justify-between">
+          <p
+            className={`text-xs font-medium ${
+              status === "completed"
                 ? "text-foreground"
-                : status === "failed"
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-          }`}
-        >
-          {label}
-        </p>
+                : status === "running"
+                  ? "text-foreground"
+                  : status === "failed"
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+            }`}
+          >
+            {label}
+          </p>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              status === "completed"
+                ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                : status === "running"
+                  ? "bg-primary/10 text-primary"
+                  : status === "failed"
+                    ? "bg-destructive/10 text-destructive"
+                    : "bg-muted text-muted-foreground/60"
+            }`}
+          >
+            {status === "idle" ? "—" : status}
+          </span>
+        </div>
         <p className="text-[11px] text-muted-foreground/70">{description}</p>
+
+        {/* Sub-stage details with progress */}
+        {subLabel && (
+          <div className="mt-1.5 space-y-1.5">
+            {/* Total progress bar */}
+            {counts && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    Total: {counts.current} of {counts.total} documents
+                  </span>
+                  <span className="text-[10px] font-semibold text-primary">{counts.pct}%</span>
+                </div>
+                <Progress value={counts.pct} className="h-1" />
+              </div>
+            )}
+
+            {/* Current document being processed */}
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                <Loader2 className="size-2.5 animate-spin" />
+                {subLabel}
+              </span>
+              {currentFile && (
+                <span className="truncate text-[10px] text-muted-foreground" title={currentFile}>
+                  {currentFile}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      <span
-        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-          status === "completed"
-            ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-            : status === "running"
-              ? "bg-primary/10 text-primary"
-              : status === "failed"
-                ? "bg-destructive/10 text-destructive"
-                : "bg-muted text-muted-foreground/60"
-        }`}
-      >
-        {status === "idle" ? "—" : status}
-      </span>
     </div>
   )
 }
@@ -141,20 +202,31 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
       {/* Overall progress bar */}
       {(isActive || job.status === "completed") && (
         <div className="px-3 pt-2.5 pb-1">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-muted-foreground">Overall progress</span>
+            <span className="text-[10px] font-semibold text-foreground">{Math.round(job.progress * 100)}%</span>
+          </div>
           <Progress value={job.progress * 100} className="h-1" />
         </div>
       )}
 
       {/* Stage rows */}
       <div className="divide-y divide-border/40 py-0.5">
-        {STAGES.map((stage) => (
-          <StageRow
-            key={stage.key}
-            label={stage.label}
-            description={stage.description}
-            status={stageStatus(stage.key, job)}
-          />
-        ))}
+        {STAGES.map((stage) => {
+          const status = stageStatus(stage.key, job)
+          const isDocProcessing = stage.key === "document_processing"
+          return (
+            <StageRow
+              key={stage.key}
+              label={stage.label}
+              description={stage.description}
+              status={status}
+              subStage={isDocProcessing && status === "running" ? job.subStage : null}
+              stageDetail={isDocProcessing && status === "running" ? job.stageDetail : null}
+              currentFile={isDocProcessing && status === "running" ? job.currentFile : null}
+            />
+          )
+        })}
       </div>
 
       {/* Error message */}

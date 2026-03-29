@@ -373,7 +373,9 @@ function TreeNodeRow({
                     ) : doc.processing_status === "completed" ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                      <HoverTooltip content="Classification pending — this file has not been processed yet. Run the AI processing to classify it.">
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Pending</span>
+                      </HoverTooltip>
                     )}
                   </div>
                   <div className="w-20 flex justify-end">
@@ -720,7 +722,9 @@ function FileStructurePanel({
                     ) : doc.processing_status === "completed" ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Pending</span>
+                      <HoverTooltip content="Classification pending — this file has not been processed yet. Run the AI processing to classify it.">
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Pending</span>
+                      </HoverTooltip>
                     )}
                   </div>
                   <div className="w-20 flex justify-end">

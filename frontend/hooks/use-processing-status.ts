@@ -21,6 +21,12 @@ export interface ProcessingJobState {
   currentStage: ProcessingStage
   progress: number
   errorMessage: string | null
+  /** Sub-stage within document_processing: "ai_processing" | "rag_processing" */
+  subStage: string | null
+  /** Human-readable detail like "3/10" */
+  stageDetail: string | null
+  /** Filename of the document currently being processed */
+  currentFile: string | null
   /** true while the first fetch is in-flight */
   loading: boolean
 }
@@ -65,6 +71,9 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
     currentStage: null,
     progress: 0,
     errorMessage: null,
+    subStage: null,
+    stageDetail: null,
+    currentFile: null,
     loading: false,
   })
   const socketRef = React.useRef<Socket | null>(null)
@@ -95,6 +104,9 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
         currentStage: data.current_stage ?? null,
         progress: data.progress ?? 0,
         errorMessage: data.error_message ?? null,
+        subStage: data.sub_stage ?? null,
+        stageDetail: data.stage_detail ?? null,
+        currentFile: data.current_file ?? null,
         loading: false,
       })
     } catch {
@@ -133,12 +145,18 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
       current_stage?: string | null
       progress?: number | null
       error_message?: string | null
+      sub_stage?: string | null
+      stage_detail?: string | null
+      current_file?: string | null
     }) => {
       setState((prev) => ({
         status: (data.status ?? prev.status) as ProcessingStatus,
         currentStage: (data.current_stage ?? prev.currentStage) as ProcessingStage,
         progress: data.progress ?? prev.progress,
         errorMessage: data.error_message !== undefined ? data.error_message : prev.errorMessage,
+        subStage: data.sub_stage !== undefined ? data.sub_stage : prev.subStage,
+        stageDetail: data.stage_detail !== undefined ? data.stage_detail : prev.stageDetail,
+        currentFile: data.current_file !== undefined ? data.current_file : prev.currentFile,
         loading: false,
       }))
     })

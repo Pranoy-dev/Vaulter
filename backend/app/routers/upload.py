@@ -57,11 +57,11 @@ _MIME_MAP: dict[str, str] = {
     ".jpg":  "image/jpeg",
     ".jpeg": "image/jpeg",
     ".gif":  "image/gif",
-    ".tiff": "image/tiff",
-    ".bmp":  "image/bmp",
-    ".webp": "image/webp",
-    ".heic": "image/heic",
-    ".heif": "image/heif",
+    ".tiff": "application/pdf",
+    ".bmp":  "application/pdf",
+    ".webp": "application/pdf",
+    ".heic": "application/pdf",
+    ".heif": "application/pdf",
     ".txt":  "text/plain",
     ".csv":  "text/csv",
     ".html": "text/html",
@@ -212,6 +212,10 @@ async def upload_complete(
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Assemble every file from its chunks, upload to Supabase Storage, and insert document rows."""
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
         _verify_ownership(deal_id, clerk_user_id)
 
@@ -223,6 +227,7 @@ async def upload_complete(
 
         total_size = 0
         uploaded_count = 0
+        failed_files: list[dict] = []
 
         for fmeta in files:
             relative_path: str = fmeta["relative_path"]
@@ -232,63 +237,71 @@ async def upload_complete(
             # Ensure every chunk is present
             if len(received) != total_chunks:
                 missing = set(range(total_chunks)) - set(received)
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"File '{relative_path}' is missing chunks: {sorted(missing)}",
+                failed_files.append({"path": relative_path, "error": f"Missing chunks: {sorted(missing)}"})
+                continue
+
+            try:
+                # Assemble
+                content, size = assemble_file(str(deal_id), session_id, relative_path)
+                total_size += size
+
+                if total_size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Upload exceeds 5 GB limit")
+
+                sha256 = hashlib.sha256(content).hexdigest()
+                filename = os.path.basename(relative_path)
+                ext = os.path.splitext(filename)[1].lower() or None
+                content_type = (
+                    _MIME_MAP.get(ext or "")
+                    or mimetypes.guess_type(filename)[0]
+                    or "application/pdf"
                 )
 
-            # Assemble
-            content, size = assemble_file(str(deal_id), session_id, relative_path)
-            total_size += size
+                # Push to Supabase Storage (date-prefixed path)
+                storage_path = upload_file(str(deal_id), relative_path, content, content_type)
 
-            if total_size > MAX_UPLOAD_BYTES:
-                raise HTTPException(status_code=413, detail="Upload exceeds 5 GB limit")
-
-            sha256 = hashlib.sha256(content).hexdigest()
-            filename = os.path.basename(relative_path)
-            ext = os.path.splitext(filename)[1].lower() or None
-            content_type = (
-                _MIME_MAP.get(ext or "")
-                or mimetypes.guess_type(filename)[0]
-                or "application/pdf"  # Supabase rejects octet-stream; pdf is safest fallback
-            )
-
-            # Push to Supabase Storage (date-prefixed path)
-            storage_path = upload_file(str(deal_id), relative_path, content, content_type)
-
-            # Upsert document — resets all processing fields if file already exists
-            sb.table("documents").upsert({
-                "deal_id": str(deal_id),
-                "original_path": relative_path,
-                "filename": filename,
-                "file_extension": ext,
-                "file_type": content_type,
-                "file_size": size,
-                "sha256_hash": sha256,
-                "storage_path": storage_path,
-                "rag_indexed": False,
-                "rag_indexed_at": None,
-                "assigned_category": "other",
-                "classification_confidence": 0,
-                "classification_reasoning": None,
-                "extracted_text": None,
-                "is_incomplete": False,
-                "incompleteness_reasons": None,
-                "is_empty": False,
-                "processing_status": "pending",
-                "processing_error": None,
-                "classified_at": None,
-            }, on_conflict="deal_id,original_path").execute()
-            uploaded_count += 1
+                # Upsert document — resets all processing fields if file already exists
+                sb.table("documents").upsert({
+                    "deal_id": str(deal_id),
+                    "original_path": relative_path,
+                    "filename": filename,
+                    "file_extension": ext,
+                    "file_type": content_type,
+                    "file_size": size,
+                    "sha256_hash": sha256,
+                    "storage_path": storage_path,
+                    "rag_indexed": False,
+                    "rag_indexed_at": None,
+                    "assigned_category": "other",
+                    "classification_confidence": 0,
+                    "classification_reasoning": None,
+                    "extracted_text": None,
+                    "is_incomplete": False,
+                    "incompleteness_reasons": None,
+                    "is_empty": False,
+                    "processing_status": "pending",
+                    "processing_error": None,
+                    "classified_at": None,
+                }, on_conflict="deal_id,original_path").execute()
+                uploaded_count += 1
+            except HTTPException:
+                raise
+            except Exception as file_exc:
+                logger.warning("Failed to upload %s: %s", relative_path, file_exc)
+                failed_files.append({"path": relative_path, "error": str(file_exc)})
+                continue
 
         # Parse skipped files JSON (sent by client)
         try:
-            import json
             skipped_list = json.loads(skipped_files) if skipped_files else []
             if not isinstance(skipped_list, list):
                 skipped_list = []
         except Exception:
             skipped_list = []
+
+        # Append server-side failures to skipped list
+        for ff in failed_files:
+            skipped_list.append(f"{ff['path']} (upload error: {ff['error']})")
 
         # Update deal counters
         sb.table("deals").update({

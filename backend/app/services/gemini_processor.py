@@ -7,6 +7,8 @@ import logging
 import os
 import subprocess
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -29,12 +31,36 @@ MAX_PDF_PAGES = 1000
 PAGES_PER_SEGMENT = 500  # split large PDFs at this page count
 GEMINI_MODEL = "gemini-2.5-flash"
 
+# Number of documents to process concurrently.
+# Free tier (10 RPM): keep at 2-3. Tier 1+ (2000 RPM): 5-10 is fine.
+PROCESSING_CONCURRENCY = 5
+
 
 def _get_client() -> genai.Client:
     global _client
     if _client is None:
         _client = genai.Client(api_key=settings.gemini_api_key)
     return _client
+
+
+# Thread-local Supabase clients — each worker thread gets its own connection.
+_thread_local = threading.local()
+
+
+def _get_thread_supabase():
+    """Return a per-thread Supabase client (avoids shared httpx connection issues)."""
+    if not hasattr(_thread_local, "sb"):
+        import httpx
+        from supabase import create_client, ClientOptions
+        _thread_local.sb = create_client(
+            settings.supabase_url,
+            settings.supabase_service_role_key,
+            options=ClientOptions(
+                postgrest_client_timeout=30,
+                httpx_client=httpx.Client(http2=False),
+            ),
+        )
+    return _thread_local.sb
 
 
 # ── Pydantic schema for Gemini structured output ────────────────────────────
@@ -858,8 +884,17 @@ def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OV
 # ── Batch processing for a deal ─────────────────────────────────────────────
 
 
-def process_deal_documents(deal_id: str) -> int:
+def process_deal_documents(deal_id: str, progress_callback=None) -> int:
     """Process all documents in a deal through Gemini.
+
+    Documents are processed in parallel (up to PROCESSING_CONCURRENCY at once).
+    Each worker uses its own Supabase client to avoid shared-connection issues.
+
+    Args:
+        deal_id: The deal ID.
+        progress_callback: Optional ``(sub_stage, current, total) -> None`` called
+            to report per-document progress.  *sub_stage* is one of
+            ``"ai_processing"`` or ``"rag_processing"``.
 
     Returns the number of documents successfully processed.
     """
@@ -868,7 +903,7 @@ def process_deal_documents(deal_id: str) -> int:
     # Fetch documents
     docs = (
         sb.table("documents")
-        .select("id, filename, file_extension, file_size, storage_path, extracted_text, is_empty, processing_status")
+        .select("id, filename, original_path, file_extension, file_size, storage_path, extracted_text, is_empty, processing_status")
         .eq("deal_id", deal_id)
         .execute()
     ).data
@@ -889,43 +924,52 @@ def process_deal_documents(deal_id: str) -> int:
         )
         categories = cats.data or []
 
-    processed = 0
+    total_docs = len(docs)
 
-    # Bulk-mark all unprocessed docs as "processing" immediately so the UI
-    # shows feedback as soon as the pipeline starts (before the per-doc loop).
-    unprocessed_ids = [
-        d["id"] for d in docs
-        if not d.get("extracted_text")
-        and not d.get("is_empty")
-        and d.get("processing_status") != "completed"
-    ]
-    if unprocessed_ids:
-        for doc_id in unprocessed_ids:
-            sb.table("documents").update({"processing_status": "processing"}).eq("id", doc_id).execute()
-
+    # Separate already-done docs from pending ones
+    already_done: list[dict] = []
+    pending_docs: list[dict] = []
     for doc in docs:
-        # Skip if already processed (has extracted_text or is marked empty)
         if doc.get("extracted_text") or doc.get("is_empty"):
-            # Mark as completed if not already
-            if doc.get("processing_status") != "completed":
-                sb.table("documents").update({"processing_status": "completed"}).eq("id", doc["id"]).execute()
-            processed += 1
-            continue
+            already_done.append(doc)
+        else:
+            pending_docs.append(doc)
 
-        # Mark as processing (already done in bulk above, but re-set in case of retries)
-        sb.table("documents").update({"processing_status": "processing"}).eq("id", doc["id"]).execute()
+    # Mark already-done docs as completed if needed (main thread, fast)
+    for doc in already_done:
+        if doc.get("processing_status") != "completed":
+            sb.table("documents").update({"processing_status": "completed"}).eq("id", doc["id"]).execute()
+
+    # Thread-safe progress counter
+    _lock = threading.Lock()
+    _completed = [len(already_done)]  # start count includes already-done
+
+    def _process_one(doc: dict) -> int:
+        """Process a single document. Runs in a worker thread."""
+        tsb = _get_thread_supabase()
+        doc_id = doc["id"]
+        filename = doc.get("original_path") or doc.get("filename", "")
+
+        # Report start and mark as processing
+        with _lock:
+            current = _completed[0]
+            if progress_callback:
+                progress_callback("ai_processing", current, total_docs, filename)
+        tsb.table("documents").update({"processing_status": "processing"}).eq("id", doc_id).execute()
 
         result = process_document(doc, categories)
 
         if result.error:
-            logger.error("Failed to process document %s: %s", doc["id"], result.error)
-            sb.table("documents").update({
+            logger.error("Failed to process document %s: %s", doc_id, result.error)
+            tsb.table("documents").update({
                 "processing_status": "failed",
                 "processing_error": str(result.error),
-            }).eq("id", doc["id"]).execute()
-            continue
+            }).eq("id", doc_id).execute()
+            with _lock:
+                _completed[0] += 1
+            return 0
 
-        # Update the document row
+        # Write classification result
         update_data: dict = {
             "extracted_text": result.extracted_text or None,
             "assigned_category": result.category_key,
@@ -943,16 +987,19 @@ def process_deal_documents(deal_id: str) -> int:
             "processing_status": "completed",
             "classified_at": datetime.now(timezone.utc).isoformat(),
         }
-        sb.table("documents").update(update_data).eq("id", doc["id"]).execute()
+        tsb.table("documents").update(update_data).eq("id", doc_id).execute()
 
         # Create text chunks for embedding / RAG
-        # Prefer Gemini's semantic chunks; fall back to naive paragraph splitting
         if result.extracted_text and result.extracted_text.strip():
+            with _lock:
+                current = _completed[0]
+                if progress_callback:
+                    progress_callback("rag_processing", current, total_docs, filename)
+
             if result.chunks:
-                # Gemini produced semantic chunks — use them
                 chunk_rows = [
                     {
-                        "document_id": doc["id"],
+                        "document_id": doc_id,
                         "deal_id": deal_id,
                         "chunk_index": idx,
                         "content": c["content"],
@@ -967,11 +1014,10 @@ def process_deal_documents(deal_id: str) -> int:
                     for idx, c in enumerate(result.chunks)
                 ]
             else:
-                # Fallback: naive paragraph-based splitting
                 naive = _chunk_text(result.extracted_text)
                 chunk_rows = [
                     {
-                        "document_id": doc["id"],
+                        "document_id": doc_id,
                         "deal_id": deal_id,
                         "chunk_index": c["chunk_index"],
                         "content": c["content"],
@@ -985,14 +1031,28 @@ def process_deal_documents(deal_id: str) -> int:
                 ]
 
             if chunk_rows:
-                # Delete any existing chunks for this document (re-processing)
-                sb.table("document_chunks").delete().eq("document_id", doc["id"]).execute()
-                sb.table("document_chunks").insert(chunk_rows).execute()
+                tsb.table("document_chunks").delete().eq("document_id", doc_id).execute()
+                tsb.table("document_chunks").insert(chunk_rows).execute()
                 logger.info(
                     "Created %d chunks for document %s (semantic=%s)",
-                    len(chunk_rows), doc["id"], bool(result.chunks),
+                    len(chunk_rows), doc_id, bool(result.chunks),
                 )
 
-        processed += 1
+        with _lock:
+            _completed[0] += 1
+
+        return 1
+
+    # Process pending docs in parallel
+    processed = len(already_done)
+    if pending_docs:
+        with ThreadPoolExecutor(max_workers=PROCESSING_CONCURRENCY) as executor:
+            futures = {executor.submit(_process_one, doc): doc for doc in pending_docs}
+            for future in as_completed(futures):
+                try:
+                    processed += future.result()
+                except Exception as exc:
+                    doc = futures[future]
+                    logger.error("Unexpected error processing document %s: %s", doc["id"], exc)
 
     return processed
