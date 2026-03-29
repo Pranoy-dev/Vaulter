@@ -42,25 +42,50 @@ function NewProjectDialog({
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const [nameError, setNameError] = React.useState<string | null>(null)
 
   const handleCreate = async () => {
     if (!title.trim()) return
+    setNameError(null)
     setLoading(true)
-    const result = await apiFetch<{ id: string; name: string }>("/api/deals", getToken, {
-      method: "POST",
-      body: JSON.stringify({ name: title.trim(), description: description.trim() || undefined }),
-    })
+
+    // Use raw fetch so we can intercept 409 and show an inline error
+    const token = await getToken()
+    try {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: title.trim(), description: description.trim() || undefined }),
+      })
+      const body = await res.json()
+      if (res.status === 409) {
+        setNameError(body.error?.message ?? "A project with this name already exists.")
+        setLoading(false)
+        return
+      }
+      if (!res.ok || !body.success) {
+        toast.error("Failed to create project", { description: body.error?.message })
+        setLoading(false)
+        return
+      }
+      const result = body.data as { id: string; name: string }
+      toast.success("Project created", { description: `"${result.name}" is ready.` })
+      onOpenChange(false)
+      onCreate(result.id, result.name, description.trim())
+    } catch {
+      toast.error("Connection error", { description: "Unable to reach the server." })
+    }
     setLoading(false)
-    if (!result) return // apiFetch already showed an error toast
-    toast.success("Project created", { description: `"${result.name}" is ready.` })
-    onOpenChange(false)
-    onCreate(result.id, result.name, description.trim())
   }
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setTitle("")
       setDescription("")
+      setNameError(null)
     }
     onOpenChange(open)
   }
@@ -77,13 +102,17 @@ function NewProjectDialog({
             <Input
               id="new-project-title"
               value={title}
-              onChange={(e) => setTitle(toPascalCase(e.target.value))}
+              onChange={(e) => { setTitle(toPascalCase(e.target.value)); setNameError(null) }}
               placeholder="Enter project title"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && title.trim() && !loading) handleCreate()
               }}
               autoFocus
+              className={nameError ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {nameError && (
+              <p className="text-xs text-destructive">{nameError}</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-project-description">Description</Label>

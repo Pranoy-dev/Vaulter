@@ -63,9 +63,21 @@ async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current
         user_id = _resolve_user_id(clerk_user_id)
         company_id = _resolve_company_id(clerk_user_id)
         sb = get_supabase()
+
+        # Reject duplicate project names for this user (case-insensitive)
+        existing = (
+            sb.table("deals")
+            .select("id")
+            .eq("user_id", str(user_id))
+            .ilike("name", body.name.strip())
+            .execute()
+        )
+        if existing.data:
+            raise HTTPException(status_code=409, detail=f'A project named "{body.name.strip()}" already exists.')
+
         insert_data = {
             "user_id": str(user_id),
-            "name": body.name,
+            "name": body.name.strip(),
         }
         if company_id:
             insert_data["company_id"] = company_id
