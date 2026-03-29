@@ -11,6 +11,16 @@ import type { UIMessage } from "ai"
 import { HistoryIcon, Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
 
@@ -45,6 +55,7 @@ function ChatHistorySheet({
   const [sessions, setSessions] = React.useState<ChatSession[]>([])
   const [loading, setLoading] = React.useState(false)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!open || !dealId) return
@@ -63,6 +74,10 @@ function ChatHistorySheet({
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
+    setConfirmDeleteId(sessionId)
+  }
+
+  const executeDelete = async (sessionId: string) => {
     if (!dealId) return
     const token = await getToken()
     if (!token) return
@@ -94,6 +109,7 @@ function ChatHistorySheet({
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-72 p-0 flex flex-col">
         <SheetHeader className="px-4 pt-4 pb-3 border-b border-white/10">
@@ -139,6 +155,27 @@ function ChatHistorySheet({
         </div>
       </SheetContent>
     </Sheet>
+
+    <AlertDialog open={!!confirmDeleteId} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null) }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This chat and all its messages will be permanently deleted.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { if (confirmDeleteId) { executeDelete(confirmDeleteId); setConfirmDeleteId(null) } }}
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   )
 }
 
@@ -272,6 +309,7 @@ function ChatInstance({
   )
   const [sessionTitle, setSessionTitle] = React.useState<string | null>(null)
   const [hasSentMessage, setHasSentMessage] = React.useState(!!isHistoricSession)
+  const [confirmDelete, setConfirmDelete] = React.useState(false)
 
   // Load messages + title from backend when opening a historic session
   React.useEffect(() => {
@@ -334,7 +372,7 @@ function ChatInstance({
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:text-destructive"
-              onClick={() => onDeleteChat(sessionId)}
+              onClick={() => setConfirmDelete(true)}
               disabled={isDeleting}
               title="Delete this chat"
             >
@@ -384,6 +422,26 @@ function ChatInstance({
           chatDisabled={chatDisabled}
         />
       )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This chat and all its messages will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { setConfirmDelete(false); onDeleteChat(sessionId) }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
