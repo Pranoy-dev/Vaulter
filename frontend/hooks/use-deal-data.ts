@@ -101,7 +101,7 @@ export function useDealData(dealId: string | null): DealData {
   const [duplicates, setDuplicates] = React.useState<DuplicateGroup[]>([])
   const [leaseChains, setLeaseChains] = React.useState<LeaseChain[]>([])
   const [skippedFiles, setSkippedFiles] = React.useState<string[]>([])
-  const [loading, setLoading] = React.useState(false)
+  const [loading, setLoading] = React.useState(!!dealId)
   const [tick, setTick] = React.useState(0)
   const silentRef = React.useRef(false)
   const getTokenRef = React.useRef(getToken)

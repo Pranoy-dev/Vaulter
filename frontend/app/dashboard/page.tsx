@@ -150,21 +150,17 @@ export default function Page() {
   const [newProjectDialogOpen, setNewProjectDialogOpen] = React.useState(false)
   // Track whether the current project was just created (skip loading spinner for new empty projects)
   const [isNewProject, setIsNewProject] = React.useState(false)
-  // Track whether the selected project already has files (determines if full-page loader is shown).
-  // Defaults to true so URL-based loads (e.g. page refresh) always show the full loader.
-  const [selectedDealHasFiles, setSelectedDealHasFiles] = React.useState(true)
 
   // Derive current deal ID directly from URL
   const selectedDealId = searchParams.get("deal")
 
-  // On first load: if URL has ?deal=<id>, fetch the deal name and file_count to restore state
+  // On first load: if URL has ?deal=<id>, fetch the deal name to restore state
   React.useEffect(() => {
     if (!selectedDealId) return
-    apiFetch<{ id: string; name: string; file_count: number }>(`/api/deals/${selectedDealId}`, getToken).then(
+    apiFetch<{ id: string; name: string }>(`/api/deals/${selectedDealId}`, getToken).then(
       (deal) => {
         if (deal) {
           setSetupProjectTitle(deal.name)
-          setSelectedDealHasFiles((deal.file_count ?? 0) > 0)
         }
       },
     )
@@ -172,9 +168,8 @@ export default function Page() {
   }, [selectedDealId])
 
   // When navigating to a project from the sidebar/list, clear the new-project flag
-  const openDeal = (id: string, name: string, hasFiles = false) => {
+  const openDeal = (id: string, name: string, _hasFiles = false) => {
     setIsNewProject(false)
-    setSelectedDealHasFiles(hasFiles)
     setSetupProjectTitle(name)
     router.push(`/dashboard?deal=${id}`)
   }
@@ -220,7 +215,6 @@ export default function Page() {
                   projectTitle={setupProjectTitle}
                   hasCompany={hasCompany}
                   isNewProject={isNewProject}
-                  hasFiles={selectedDealHasFiles}
                   onBack={handleBack}
                 />
               </div>
@@ -240,7 +234,8 @@ export default function Page() {
             onCreate={(dealId, title) => {
               setIsNewProject(true)
               setSidebarRefreshKey((k) => k + 1)
-              openDeal(dealId, title)
+              setSetupProjectTitle(title)
+              router.push(`/dashboard?deal=${dealId}`)
             }}
           />
         </SidebarProvider>

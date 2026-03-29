@@ -1852,11 +1852,10 @@ export type ProjectSetupScreenProps = {
   projectTitle: string
   hasCompany: boolean
   isNewProject?: boolean
-  hasFiles?: boolean
   onBack: () => void
 }
 
-export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProject = false, hasFiles = false, onBack }: ProjectSetupScreenProps) {
+export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProject = false, onBack }: ProjectSetupScreenProps) {
   const { getToken } = useAuth()
   const [section, setSection] = React.useState<SetupSection>("upload")
   const [chatOpen, setChatOpen] = React.useState(true)
@@ -2114,30 +2113,15 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
 
   const isUploading = ["initializing", "uploading", "completing"].includes(uploadProgress.state)
 
-  // Show a full-screen loader only on the very first load of an existing project that has files.
-  // New projects and projects with no files skip the loader and go straight to the upload tab.
+  // Show a full-screen loader on the very first load of any existing project.
+  // New projects (just created) skip the loader and go straight to the empty upload tab.
   const hasLoadedOnce = React.useRef(false)
   if (!dealData.loading) hasLoadedOnce.current = true
   if (!isNewProject && dealData.loading && !hasLoadedOnce.current) {
-    // Show full loader for projects with files, subtle skeleton for others (avoids blank flash)
-    if (hasFiles) {
-      return (
-        <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="size-7 animate-spin" />
-          <p className="text-sm">Loading project…</p>
-        </div>
-      )
-    }
     return (
-      <div className="flex h-full flex-1 flex-col overflow-hidden bg-muted/20">
-        <div className="flex min-h-0 flex-1 flex-col gap-2 px-3 py-2 md:gap-2.5 md:px-4 md:py-3">
-          <div className="h-8 w-48 animate-pulse rounded-lg bg-muted-foreground/10" />
-          <div className="flex flex-1 items-center justify-center">
-            <div className="flex flex-col items-center gap-3 text-muted-foreground/40">
-              <Loader2 className="size-5 animate-spin" />
-            </div>
-          </div>
-        </div>
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="size-7 animate-spin" />
+        <p className="text-sm">Loading project…</p>
       </div>
     )
   }
