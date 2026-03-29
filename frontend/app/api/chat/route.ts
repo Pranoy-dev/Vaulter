@@ -7,6 +7,7 @@ import {
   type JSONSchema7,
   type UIMessage,
 } from "ai"
+import { auth } from "@clerk/nextjs/server"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
 
@@ -110,9 +111,9 @@ export async function POST(req: Request) {
 }
 
 async function _handlePost(req: Request) {
-  // Extract the Clerk JWT from the incoming Authorization header.
-  // AssistantChatTransport sends a fresh token on every request — no stale state.
-  const authToken = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? ""
+  // Use Clerk server-side auth to get a fresh JWT — no need for the client to send a token.
+  const { getToken } = await auth()
+  const authToken = (await getToken()) ?? ""
 
   const body = await req.json()
   const messages = body.messages as UIMessage[]

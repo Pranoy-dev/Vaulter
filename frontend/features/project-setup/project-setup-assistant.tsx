@@ -7,7 +7,8 @@ import { useAuth } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 import * as React from "react"
 import type { ReactNode } from "react"
-import { HistoryIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import type { UIMessage } from "ai"
+import { HistoryIcon, Loader2Icon, PlusIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { toast } from "sonner"
@@ -28,7 +29,7 @@ function ChatHistorySheet({
   open,
   onOpenChange,
   dealId,
-  authToken,
+  getToken,
   currentSessionId,
   onLoadSession,
   onDeleteSession,
@@ -36,7 +37,7 @@ function ChatHistorySheet({
   open: boolean
   onOpenChange: (open: boolean) => void
   dealId: string | null | undefined
-  authToken: string | null
+  getToken: () => Promise<string | null>
   currentSessionId: string
   onLoadSession: (sessionId: string) => void
   onDeleteSession: (sessionId: string) => void
@@ -46,25 +47,30 @@ function ChatHistorySheet({
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    if (!open || !dealId || !authToken) return
+    if (!open || !dealId) return
     setLoading(true)
-    fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions`, {
-      headers: { Authorization: `Bearer ${authToken}` },
+    getToken().then((token) => {
+      if (!token) { setLoading(false); return }
+      fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((body) => setSessions(body.data ?? []))
+        .catch(() => toast.error("Failed to load chat history"))
+        .finally(() => setLoading(false))
     })
-      .then((r) => r.json())
-      .then((body) => setSessions(body.data ?? []))
-      .catch(() => toast.error("Failed to load chat history"))
-      .finally(() => setLoading(false))
-  }, [open, dealId, authToken])
+  }, [open, dealId, getToken])
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
-    if (!dealId || !authToken) return
+    if (!dealId) return
+    const token = await getToken()
+    if (!token) return
     setDeletingId(sessionId)
     try {
       const res = await fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions/${sessionId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error()
       setSessions((prev) => prev.filter((s) => s.id !== sessionId))
@@ -101,11 +107,14 @@ function ChatHistorySheet({
             <p className="px-4 py-6 text-xs text-muted-foreground text-center">No saved chats yet.</p>
           )}
           {!loading && sessions.map((s) => (
-            <button
+            <div
               key={s.id}
+              role="button"
+              tabIndex={0}
               onClick={() => { onLoadSession(s.id); onOpenChange(false) }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { onLoadSession(s.id); onOpenChange(false) } }}
               className={cn(
-                "group w-full flex items-start justify-between gap-2 px-4 py-2.5 text-left hover:bg-white/5 transition-colors",
+                "group w-full flex items-start justify-between gap-2 px-4 py-2.5 text-left hover:bg-white/5 transition-colors cursor-pointer",
                 s.id === currentSessionId && "bg-white/8"
               )}
             >
@@ -125,7 +134,7 @@ function ChatHistorySheet({
               >
                 <Trash2Icon className="h-3 w-3" />
               </button>
-            </button>
+            </div>
           ))}
         </div>
       </SheetContent>
@@ -133,59 +142,50 @@ function ChatHistorySheet({
   )
 }
 
-// ── Chat instance (re-mounts on resetKey change) ──────────────────────────
+// ── Inner component that owns useChatRuntime (so it mounts fresh once messages are ready) ──
 
-function ChatInstance({
+function ChatThreadView({
+  transport,
+  initialMessages,
   chatPrepend,
   dealId,
-  initialSessionId,
+  sessionId,
+  isHistoricSession,
   getToken,
-  onNewChat,
-  onDeleteChat,
-  onOpenHistory,
-  isDeleting,
+  onTitleResolved,
+  onHasSentMessage,
   chatDisabled,
 }: {
+  transport: AssistantChatTransport
+  initialMessages: UIMessage[]
   chatPrepend?: ReactNode
   dealId?: string | null
-  initialSessionId: string
+  sessionId: string
+  isHistoricSession?: boolean
   getToken: () => Promise<string | null>
-  onNewChat: () => void
-  onDeleteChat: (sessionId: string) => void
-  onOpenHistory: () => void
-  isDeleting: boolean
+  onTitleResolved: (title: string) => void
+  onHasSentMessage: () => void
   chatDisabled?: boolean
 }) {
-  const sessionId = initialSessionId
+  const runtime = useChatRuntime({
+    transport,
+    ...(initialMessages.length > 0 ? { messages: initialMessages } : {}),
+  })
 
-  const transport = React.useMemo(
-    () =>
-      new AssistantChatTransport({
-        api: "/api/chat",
-        body: {
-          ...(dealId ? { dealId } : {}),
-          ...(dealId ? { sessionId } : {}),
-        },
-      }),
-    [dealId, sessionId],
-  )
-
-  const runtime = useChatRuntime({ transport })
-
-  const [hasSentMessage, setHasSentMessage] = React.useState(false)
-  const [sessionTitle, setSessionTitle] = React.useState<string | null>(null)
   React.useEffect(() => {
     return runtime.thread.subscribe(() => {
       const msgs = runtime.thread.getState().messages
-      if (msgs.length > 0) setHasSentMessage(true)
+      if (msgs.length > 0) onHasSentMessage()
     })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runtime])
 
-  // Fetch the backend-generated session title once an assistant message arrives.
-  // The backend generates it asynchronously, so we retry a few times.
+  // Fetch the backend-generated session title once an assistant message arrives (new sessions).
+  // For historic sessions the title was already fetched by the parent.
   const hasAssistantMsg = React.useRef(false)
   const cancelTitleFetch = React.useRef(false)
   React.useEffect(() => {
+    if (isHistoricSession) return // title already resolved by parent
     cancelTitleFetch.current = false
     const unsubscribe = runtime.thread.subscribe(async () => {
       const msgs = runtime.thread.getState().messages
@@ -204,81 +204,187 @@ function ChatInstance({
           const session = (body.data ?? []).find((s: ChatSession) => s.id === sessionId)
           if (cancelTitleFetch.current) return
           if (session?.title) {
-            setSessionTitle(session.title)
+            onTitleResolved(session.title)
           } else if (attempt < 5) {
             setTimeout(() => fetchTitle(attempt + 1), 2000)
           }
         } catch {}
       }
-      // Small initial delay to let backend finish saving + generating title
       setTimeout(() => fetchTitle(), 1500)
     })
     return () => {
       cancelTitleFetch.current = true
       unsubscribe()
     }
-  }, [runtime, dealId, getToken, sessionId])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runtime])
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col">
-        {/* Chat action bar */}
-        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-1.5">
-          <span className="max-w-[140px] truncate text-xs font-medium text-muted-foreground" title={sessionTitle ?? undefined}>{sessionTitle ?? "Chat"}</span>
-          <div className="flex items-center gap-1">
-            {hasSentMessage && dealId && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                onClick={() => onDeleteChat(sessionId)}
-                disabled={isDeleting}
-                title="Delete this chat"
-              >
-                <Trash2Icon className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {dealId && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={onOpenHistory}
-                title="Chat history"
-              >
-                <HistoryIcon className="h-3.5 w-3.5" />
-              </Button>
-            )}
+      <div
+        className={cn(
+          "aui-sidechat flex min-h-0 flex-1 flex-col",
+          "[--thread-max-width:100%]",
+          "[&_.aui-thread-viewport]:px-2 [&_.aui-thread-viewport]:pb-0 [&_.aui-thread-viewport]:pl-2 [&_.aui-thread-viewport]:pr-2 [&_.aui-thread-viewport]:pt-0",
+          "[&_.aui-thread-chat-prepend]:-mx-2 [&_.aui-thread-chat-prepend]:border-white/10 [&_.aui-thread-chat-prepend]:px-0 [&_.aui-thread-chat-prepend]:pt-3",
+          "[&_.aui-thread-viewport]:scroll-pt-3",
+          "[&_.aui-thread-viewport-footer]:mx-0 [&_.aui-thread-viewport-footer]:max-w-none [&_.aui-thread-viewport-footer]:w-full [&_.aui-thread-viewport-footer]:pb-2 [&_.aui-thread-viewport-footer]:md:pb-3",
+          "[&_.aui-assistant-message-root]:mx-0 [&_.aui-assistant-message-root]:max-w-none",
+          "[&_.aui-user-message-root]:mx-0 [&_.aui-user-message-root]:max-w-none",
+          "[&_.aui-thread-scroll-to-bottom]:self-start [&_.aui-thread-scroll-to-bottom]:left-2 [&_.aui-thread-scroll-to-bottom]:-translate-x-0",
+        )}
+      >
+        <Thread chatPrepend={chatPrepend} disabled={chatDisabled} />
+      </div>
+    </AssistantRuntimeProvider>
+  )
+}
+
+// ── Chat instance (re-mounts on resetKey change) ──────────────────────────
+
+function ChatInstance({
+  chatPrepend,
+  dealId,
+  initialSessionId,
+  isHistoricSession,
+  getToken,
+  onNewChat,
+  onDeleteChat,
+  onOpenHistory,
+  isDeleting,
+  chatDisabled,
+}: {
+  chatPrepend?: ReactNode
+  dealId?: string | null
+  initialSessionId: string
+  isHistoricSession?: boolean
+  getToken: () => Promise<string | null>
+  onNewChat: () => void
+  onDeleteChat: (sessionId: string) => void
+  onOpenHistory: () => void
+  isDeleting: boolean
+  chatDisabled?: boolean
+}) {
+  const sessionId = initialSessionId
+
+  const [resolvedMessages, setResolvedMessages] = React.useState<UIMessage[] | null>(
+    isHistoricSession ? null : [],
+  )
+  const [sessionTitle, setSessionTitle] = React.useState<string | null>(null)
+  const [hasSentMessage, setHasSentMessage] = React.useState(!!isHistoricSession)
+
+  // Load messages + title from backend when opening a historic session
+  React.useEffect(() => {
+    if (!isHistoricSession || !dealId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = await getToken()
+        if (!token || cancelled) return
+        const [msgsRes, sessionsRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions/${sessionId}/messages`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ])
+        if (cancelled) return
+        const msgsBody = await msgsRes.json()
+        const sessionsBody = await sessionsRes.json()
+        if (cancelled) return
+        const rawMessages: { id: string; role: string; content: string }[] = msgsBody.data ?? []
+        const uiMessages: UIMessage[] = rawMessages.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          parts: [{ type: "text" as const, text: m.content }],
+          content: m.content,
+        }))
+        const session = (sessionsBody.data ?? []).find((s: ChatSession) => s.id === sessionId)
+        if (session?.title && !cancelled) setSessionTitle(session.title)
+        if (!cancelled) setResolvedMessages(uiMessages)
+      } catch {
+        if (!cancelled) setResolvedMessages([])
+      }
+    })()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const transport = React.useMemo(
+    () =>
+      new AssistantChatTransport({
+        api: "/api/chat",
+        body: {
+          ...(dealId ? { dealId } : {}),
+          ...(dealId ? { sessionId } : {}),
+        },
+      }),
+    [dealId, sessionId],
+  )
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
+      {/* Chat action bar */}
+      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-1.5">
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground mr-2" title={sessionTitle ?? undefined}>{sessionTitle ?? "Chat"}</span>
+        <div className="flex items-center gap-1">
+          {hasSentMessage && dealId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              onClick={() => onDeleteChat(sessionId)}
+              disabled={isDeleting}
+              title="Delete this chat"
+            >
+              <Trash2Icon className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {dealId && (
             <Button
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              onClick={onNewChat}
-              title="New chat"
+              onClick={onOpenHistory}
+              title="Chat history"
             >
-              <PlusIcon className="h-3.5 w-3.5" />
+              <HistoryIcon className="h-3.5 w-3.5" />
             </Button>
-          </div>
-        </div>
-
-        {/* Thread */}
-        <div
-          className={cn(
-            "aui-sidechat flex min-h-0 flex-1 flex-col",
-            "[--thread-max-width:100%]",
-            "[&_.aui-thread-viewport]:px-2 [&_.aui-thread-viewport]:pb-0 [&_.aui-thread-viewport]:pl-2 [&_.aui-thread-viewport]:pr-2 [&_.aui-thread-viewport]:pt-0",
-            "[&_.aui-thread-chat-prepend]:-mx-2 [&_.aui-thread-chat-prepend]:border-white/10 [&_.aui-thread-chat-prepend]:px-0 [&_.aui-thread-chat-prepend]:pt-3",
-            "[&_.aui-thread-viewport]:scroll-pt-3",
-            "[&_.aui-thread-viewport-footer]:mx-0 [&_.aui-thread-viewport-footer]:max-w-none [&_.aui-thread-viewport-footer]:w-full [&_.aui-thread-viewport-footer]:pb-2 [&_.aui-thread-viewport-footer]:md:pb-3",
-            "[&_.aui-assistant-message-root]:mx-0 [&_.aui-assistant-message-root]:max-w-none",
-            "[&_.aui-user-message-root]:mx-0 [&_.aui-user-message-root]:max-w-none",
-            "[&_.aui-thread-scroll-to-bottom]:self-start [&_.aui-thread-scroll-to-bottom]:left-2 [&_.aui-thread-scroll-to-bottom]:-translate-x-0",
           )}
-        >
-          <Thread chatPrepend={chatPrepend} disabled={chatDisabled} />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+            onClick={onNewChat}
+            title="New chat"
+          >
+            <PlusIcon className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
-    </AssistantRuntimeProvider>
+
+      {resolvedMessages === null ? (
+        /* Loading history */
+        <div className="flex flex-1 items-center justify-center text-muted-foreground/50">
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+        </div>
+      ) : (
+        /* Thread — mounts fresh once resolvedMessages is set, so useChatRuntime gets messages at init */
+        <ChatThreadView
+          transport={transport}
+          initialMessages={resolvedMessages}
+          chatPrepend={chatPrepend}
+          dealId={dealId}
+          sessionId={sessionId}
+          isHistoricSession={isHistoricSession}
+          getToken={getToken}
+          onTitleResolved={setSessionTitle}
+          onHasSentMessage={() => setHasSentMessage(true)}
+          chatDisabled={chatDisabled}
+        />
+      )}
+    </div>
   )
 }
 
@@ -288,10 +394,12 @@ export function ProjectSetupAssistant({
   chatPrepend,
   dealId,
   chatDisabled,
+  onNewChat: onNewChatProp,
 }: {
   chatPrepend?: ReactNode
   dealId?: string | null
   chatDisabled?: boolean
+  onNewChat?: () => void
 }) {
   const { getToken } = useAuth()
   // resetKey forces full re-mount of ChatInstance (new session)
@@ -300,26 +408,24 @@ export function ProjectSetupAssistant({
   const [activeSessionId, setActiveSessionId] = React.useState(() => crypto.randomUUID())
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [historyOpen, setHistoryOpen] = React.useState(false)
-
-  // authToken is only needed for the history sheet and delete calls
-  // (the transport itself uses the Authorization header for /api/chat)
-  const [authToken, setAuthToken] = React.useState<string | null>(null)
-  React.useEffect(() => {
-    getToken().then((t) => setAuthToken(t ?? null))
-  }, [getToken])
+  const [isHistoricSession, setIsHistoricSession] = React.useState(false)
 
   const handleNewChat = () => {
     setActiveSessionId(crypto.randomUUID())
+    setIsHistoricSession(false)
     setResetKey((k) => k + 1)
+    onNewChatProp?.()
   }
 
   const handleDeleteChat = async (sessionId: string) => {
-    if (!dealId || !authToken) return
+    if (!dealId) return
+    const token = await getToken()
+    if (!token) return
     setIsDeleting(true)
     try {
       const res = await fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions/${sessionId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error("Delete failed")
       toast.success("Chat deleted")
@@ -333,6 +439,7 @@ export function ProjectSetupAssistant({
 
   const handleLoadSession = (sessionId: string) => {
     setActiveSessionId(sessionId)
+    setIsHistoricSession(true)
     setResetKey((k) => k + 1)
   }
 
@@ -349,6 +456,7 @@ export function ProjectSetupAssistant({
         chatPrepend={chatPrepend}
         dealId={dealId}
         initialSessionId={activeSessionId}
+        isHistoricSession={isHistoricSession}
         getToken={getToken}
         onNewChat={handleNewChat}
         onDeleteChat={handleDeleteChat}
@@ -360,7 +468,7 @@ export function ProjectSetupAssistant({
         open={historyOpen}
         onOpenChange={setHistoryOpen}
         dealId={dealId}
-        authToken={authToken}
+        getToken={getToken}
         currentSessionId={activeSessionId}
         onLoadSession={handleLoadSession}
         onDeleteSession={handleHistoryDelete}

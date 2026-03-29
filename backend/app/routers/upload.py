@@ -326,14 +326,6 @@ async def upload_complete(
         # Clean up temp chunks
         cleanup_session(str(deal_id), session_id)
 
-        # Run hash-based duplicate detection immediately — hashes are already
-        # in the DB so this is fast and requires no AI/text extraction.
-        try:
-            from app.services.duplicate_detection import detect_hash_duplicates
-            await asyncio.to_thread(detect_hash_duplicates, str(deal_id))
-        except Exception as dup_exc:
-            logger.warning("Hash duplicate detection failed after upload: %s", dup_exc)
-
         return ApiResponse.ok(
             UploadCompleteResponse(
                 deal_id=deal_id,
@@ -343,5 +335,25 @@ async def upload_complete(
         )
     except HTTPException:
         raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
+@router.post("/{deal_id}/upload/detect-duplicates")
+async def detect_duplicates_after_upload(
+    deal_id: uuid.UUID,
+    clerk_user_id: str = Depends(get_current_user_id),
+):
+    """Trigger hash-based duplicate detection for a deal.
+
+    Called by the frontend immediately after /upload/complete so the
+    user sees it as an explicit step. Hashes are already stored in the
+    DB during assembly, so this is a fast DB-only operation.
+    """
+    _verify_ownership(deal_id, clerk_user_id)
+    try:
+        from app.services.duplicate_detection import detect_hash_duplicates
+        groups_found = await asyncio.to_thread(detect_hash_duplicates, str(deal_id))
+        return ApiResponse.ok({"groups_found": groups_found})
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc

@@ -37,7 +37,7 @@ export interface UploadProgress {
   /** Per-file progress keyed by relativePath */
   files: Record<string, FileUploadProgress>
   /** Current state */
-  state: "idle" | "initializing" | "uploading" | "completing" | "done" | "error"
+  state: "idle" | "initializing" | "uploading" | "completing" | "detecting-duplicates" | "done" | "error"
   error?: string
 }
 
@@ -248,7 +248,7 @@ export async function uploadFiles(
   const workers = Array.from({ length: Math.min(CONCURRENT_CHUNKS, tasks.length) }, () => runNext())
   await Promise.all(workers)
 
-  // 5. Complete
+  // 5. Complete (assemble + save to storage)
   progress.state = "completing"
   notify()
 
@@ -262,6 +262,15 @@ export async function uploadFiles(
     signal,
   })
   const result = await unwrap<CompleteResponse>(completeRes)
+
+  // 6. Detect duplicates (fast DB-only query — hashes already stored during assembly)
+  progress.state = "detecting-duplicates"
+  notify()
+  try {
+    await authedFetch(`/api/deals/${dealId}/upload/detect-duplicates`, getToken, { method: "POST", signal })
+  } catch {
+    // Non-fatal — duplicates will be detected on next refresh
+  }
 
   progress.state = "done"
   progress.overall = 1

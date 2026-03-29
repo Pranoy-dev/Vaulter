@@ -216,6 +216,8 @@ function StatusChatLog({
     }
   } else if (uploadProgress.state === "completing") {
     entries.push({ key: "upload-completing", text: "Finalizing upload…", icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
+  } else if (uploadProgress.state === "detecting-duplicates") {
+    entries.push({ key: "upload-detecting", text: "Checking for duplicate files…", icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
   } else if (uploadProgress.state === "done") {
     const count = Object.keys(uploadProgress.files).length
     entries.push({
@@ -298,7 +300,7 @@ function StatusChatLog({
   }
 
   // ── Processing status ──────────────────────────────────────────────────
-  if (processingJob.status === "pending") {
+  if (processingJob.status === "pending" && documents.length > 0) {
     entries.push({ key: "proc-pending", text: "Processing queued — waiting to start…", icon: <Clock className="size-3.5 opacity-70" />, accent: "border-blue-500/50" })
   } else if (processingJob.status === "running") {
     const stage = processingJob.currentStage
@@ -670,6 +672,7 @@ function TreeNodeRow({
   onMove,
   movingId,
   onDeleteFolder,
+  deletingFolderPath,
 }: {
   node: TreeNode
   depth?: number
@@ -681,6 +684,7 @@ function TreeNodeRow({
   onMove?: (docId: string, targetFolder: string) => void
   movingId?: string | null
   onDeleteFolder?: (folderPath: string, folderName: string, fileCount: number) => void
+  deletingFolderPath?: string | null
 }) {
   const [open, setOpen] = React.useState(true)
   const [isDragOver, setIsDragOver] = React.useState(false)
@@ -729,11 +733,18 @@ function TreeNodeRow({
       {onDeleteFolder && (
         <button
           type="button"
+          disabled={deletingFolderPath === node.path}
           onClick={(e) => { e.stopPropagation(); onDeleteFolder(node.path, node.name, totalFiles) }}
-          className="shrink-0 rounded p-1 mr-1 text-muted-foreground/30 opacity-0 group-hover/folder:opacity-100 hover:text-red-500 transition-all"
+          className={`shrink-0 rounded p-1 mr-1 text-muted-foreground/30 transition-all hover:text-red-500 ${
+            deletingFolderPath === node.path
+              ? "opacity-100 text-red-500"
+              : "opacity-0 group-hover/folder:opacity-100"
+          }`}
           title="Delete folder"
         >
-          <Trash2 className="size-3.5" />
+          {deletingFolderPath === node.path
+            ? <Loader2 className="size-3.5 animate-spin" />
+            : <Trash2 className="size-3.5" />}
         </button>
       )}
       </div>
@@ -742,7 +753,7 @@ function TreeNodeRow({
         {Object.values(node.children)
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((child) => (
-            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} onPreview={onPreview} loadingPreviewId={loadingPreviewId} onDelete={onDelete} deletingId={deletingId} onMove={onMove} movingId={movingId} onDeleteFolder={onDeleteFolder} />
+            <TreeNodeRow key={child.path} node={child} depth={depth + 1} showStatus={showStatus} onPreview={onPreview} loadingPreviewId={loadingPreviewId} onDelete={onDelete} deletingId={deletingId} onMove={onMove} movingId={movingId} onDeleteFolder={onDeleteFolder} deletingFolderPath={deletingFolderPath} />
           ))}
         {/* Files in this folder */}
         {node.files.map((doc) => (
@@ -852,6 +863,7 @@ function FileStructurePanel({
   dealId,
   getToken,
   onDeleted,
+  onAllDeleted,
 }: {
   documents: DealDocument[]
   loading: boolean
@@ -859,6 +871,7 @@ function FileStructurePanel({
   dealId?: string | null
   getToken?: () => Promise<string | null>
   onDeleted?: () => void
+  onAllDeleted?: () => void
 }) {
   const [previewDoc, setPreviewDoc] = React.useState<{ url: string; title: string } | null>(null)
   const [loadingPreviewId, setLoadingPreviewId] = React.useState<string | null>(null)
@@ -870,7 +883,7 @@ function FileStructurePanel({
   const [movingId, setMovingId] = React.useState<string | null>(null)
   const [extraFolderPaths, setExtraFolderPaths] = React.useState<Set<string>>(new Set())
   const [confirmFolderDelete, setConfirmFolderDelete] = React.useState<{ path: string; name: string; fileCount: number } | null>(null)
-  const [deletingFolder, setDeletingFolder] = React.useState(false)
+  const [deletingFolderPath, setDeletingFolderPath] = React.useState<string | null>(null)
 
   // Clear overrides when the parent documents list updates (server confirmed the change)
   const prevDocsRef = React.useRef(documents)
@@ -945,7 +958,7 @@ function FileStructurePanel({
       .map((d) => localPathOverrides[d.id] !== undefined ? { ...d, original_path: localPathOverrides[d.id] } : d)
     const docIds = getAllDocIdsInFolder(confirmFolderDelete.path, currentDocs)
     setConfirmFolderDelete(null)
-    setDeletingFolder(true)
+    setDeletingFolderPath(confirmFolderDelete.path)
     try {
       const token = await getToken()
       if (!token) return
@@ -969,7 +982,7 @@ function FileStructurePanel({
     } catch {
       toast.error("Failed to delete folder")
     } finally {
-      setDeletingFolder(false)
+      setDeletingFolderPath(null)
     }
   }
 
@@ -1021,10 +1034,21 @@ function FileStructurePanel({
   const canPreview = !!(dealId && getToken)
   const canDelete = !!(dealId && getToken)
 
-  if (loading) return <LoadingRows />
+  // Compute visible docs here (before early returns) so the effect below
+  // can run unconditionally and satisfy Rules of Hooks
   const visibleDocs = documents
     .filter((d) => !deletedIds.has(d.id))
     .map((d) => localPathOverrides[d.id] !== undefined ? { ...d, original_path: localPathOverrides[d.id] } : d)
+
+  // Fire onAllDeleted once all files have been locally removed
+  const hasHadDocsRef = React.useRef(documents.length > 0)
+  React.useEffect(() => {
+    if (visibleDocs.length > 0) { hasHadDocsRef.current = true; return }
+    if (hasHadDocsRef.current) onAllDeleted?.()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleDocs.length])
+
+  if (loading) return <LoadingRows />
   if (visibleDocs.length === 0)
     return <EmptyState icon={FolderTree} message="No files yet — upload to see folder structure." />
 
@@ -1046,9 +1070,9 @@ function FileStructurePanel({
             will be permanently deleted.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmFolderDelete(null)} disabled={deletingFolder}>Cancel</Button>
-            <Button variant="destructive" onClick={handleFolderDeleteConfirmed} disabled={deletingFolder}>
-              {deletingFolder ? <><Loader2 className="size-4 animate-spin mr-1" />Deleting…</> : "Delete folder"}
+            <Button variant="outline" onClick={() => setConfirmFolderDelete(null)} disabled={!!deletingFolderPath}>Cancel</Button>
+            <Button variant="destructive" onClick={handleFolderDeleteConfirmed} disabled={!!deletingFolderPath}>
+              {deletingFolderPath ? <><Loader2 className="size-4 animate-spin mr-1" />Deleting…</> : "Delete folder"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1086,7 +1110,7 @@ function FileStructurePanel({
     <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
       <div className="divide-y divide-border/20">
         {topLevel.map((node) => (
-          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} onMove={handleMove} movingId={movingId} onDeleteFolder={canDelete ? (path, name, count) => setConfirmFolderDelete({ path, name, fileCount: count }) : undefined} />
+          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} onMove={handleMove} movingId={movingId} onDeleteFolder={canDelete ? (path, name, count) => setConfirmFolderDelete({ path, name, fileCount: count }) : undefined} deletingFolderPath={deletingFolderPath} />
         ))}
         {/* Root-level drop zone — drop here to move to root */}
         <div
@@ -1216,11 +1240,25 @@ function DuplicationPanel({
   onDeleted: () => void
   onAllResolved?: () => void
 }) {
-  const [deleting, setDeleting] = React.useState<string | null>(null)
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set())
   const [confirmDoc, setConfirmDoc] = React.useState<{ id: string; filename: string } | null>(null)
   const [deletedIds, setDeletedIds] = React.useState<Set<string>>(new Set())
   const [loadingPreview, setLoadingPreview] = React.useState<string | null>(null)
   const [preview, setPreview] = React.useState<{ url: string; title: string } | null>(null)
+
+  // Compute visible groups unconditionally — needed by the effect below (hooks must
+  // not be called after conditional returns)
+  const visibleGroups = groups
+    .map((g) => ({ ...g, members: g.members.filter((m) => !deletedIds.has(m.document_id)) }))
+    .filter((g) => g.members.length >= 2)
+
+  // Must sit before any early returns to satisfy Rules of Hooks
+  React.useEffect(() => {
+    if (visibleGroups.length === 0 && groups.length > 0 && !loading) {
+      onAllResolved?.()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleGroups.length, groups.length, loading])
 
   async function fetchSignedUrl(docId: string): Promise<string | null> {
     if (!dealId) return null
@@ -1254,7 +1292,7 @@ function DuplicationPanel({
     if (!dealId || !confirmDoc) return
     const { id: docId, filename } = confirmDoc
     setConfirmDoc(null)
-    setDeleting(docId)
+    setDeletingIds((prev) => { const s = new Set(prev); s.add(docId); return s })
     try {
       const token = await getToken()
       if (!token) return
@@ -1270,25 +1308,13 @@ function DuplicationPanel({
         toast.error("Failed to delete document")
       }
     } finally {
-      setDeleting(null)
+      setDeletingIds((prev) => { const s = new Set(prev); s.delete(docId); return s })
     }
   }
 
   if (loading) return <LoadingRows />
   if (groups.length === 0)
     return <EmptyState icon={Copy} message="No duplicates detected yet." />
-
-  const visibleGroups = groups
-    .map((g) => ({ ...g, members: g.members.filter((m) => !deletedIds.has(m.document_id)) }))
-    .filter((g) => g.members.length >= 2)
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  React.useEffect(() => {
-    if (visibleGroups.length === 0 && groups.length > 0 && !loading) {
-      onAllResolved?.()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleGroups.length])
 
   return (
     <>
@@ -1447,12 +1473,12 @@ function DuplicationPanel({
                       ) : (
                         <button
                           type="button"
-                          disabled={deleting === m.document_id}
+                          disabled={deletingIds.has(m.document_id)}
                           onClick={() => setConfirmDoc({ id: m.document_id, filename: m.filename ?? m.original_path ?? "this file" })}
                           className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground/50 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 transition-colors disabled:opacity-40"
                           title="Delete this duplicate"
                         >
-                          {deleting === m.document_id
+                          {deletingIds.has(m.document_id)
                             ? <Loader2 className="size-4 animate-spin" />
                             : <Trash2 className="size-3.5" />}
                         </button>
@@ -1877,6 +1903,20 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
   const { classifications, loading: classificationsLoading } = useClassifications()
   const processingJob = useProcessingStatus(dealId)
 
+  // Tracks whether all duplicate groups have been locally resolved (before refresh confirms it)
+  const [allDuplicatesResolved, setAllDuplicatesResolved] = React.useState(false)
+  // Reset when backend data refreshes and confirms no duplicates remain
+  React.useEffect(() => {
+    if (dealData.duplicates.length === 0) setAllDuplicatesResolved(false)
+  }, [dealData.duplicates.length])
+
+  // When all files are deleted, drop back to the upload tab
+  const hasLoadedDocsOnce = React.useRef(false)
+  React.useEffect(() => {
+    if (dealData.documents.length > 0) { hasLoadedDocsOnce.current = true; return }
+    if (hasLoadedDocsOnce.current && section !== "upload") setSection("upload")
+  }, [dealData.documents.length, section])
+
   // ── Auto-refresh countdown ────────────────────────────────────────────────
   const [refreshCountdown, setRefreshCountdown] = React.useState(5)
   const hasDocsNeedingWork =
@@ -2121,7 +2161,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
       ? selectedFiles[0].relativePath.split("/")[0] || "Selected files"
       : ""
 
-  const isUploading = ["initializing", "uploading", "completing"].includes(uploadProgress.state)
+  const isUploading = ["initializing", "uploading", "completing", "detecting-duplicates"].includes(uploadProgress.state)
 
   // Show a full-screen loader on the very first load of any existing project.
   // New projects (just created) skip the loader and go straight to the empty upload tab.
@@ -2204,6 +2244,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                   chatPrepend={isDemoWorkspace ? <DemoAgentProcessingLog /> : <StatusChatLog uploadProgress={uploadProgress} processingJob={processingJob} documents={dealData.documents} duplicates={dealData.duplicates} />}
                   dealId={dealId}
                   chatDisabled={!isDemoWorkspace && !dealData.documents.some((d) => d.rag_indexed)}
+                  onNewChat={() => setUploadProgress({ overall: 0, files: {}, state: "idle" })}
                 />
               </div>
             </CardContent>
@@ -2246,7 +2287,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
               </ToggleGroupItem>
               {(isDemoWorkspace || dealData.documents.length > 0) && (
                 <>
-                  {(isDemoWorkspace || dealData.duplicates.length > 0) && (
+                  {(isDemoWorkspace || (dealData.duplicates.length > 0 && !allDuplicatesResolved)) && (
                     <ToggleGroupItem
                       value="duplication"
                       aria-label="Duplication"
@@ -2254,7 +2295,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     >
                       <Copy aria-hidden />
                       Duplication
-                      {dealData.duplicates.length > 0 && (
+                      {dealData.duplicates.length > 0 && !allDuplicatesResolved && (
                         <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950/50 dark:text-red-400">
                           {dealData.duplicates.length}
                         </span>
@@ -2469,7 +2510,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                             </div>
                           </div>
                         </div>
-                        <FileStructurePanel documents={docs} loading={false} showStatus dealId={dealId} getToken={getToken} onDeleted={dealData.silentRefresh} />
+                        <FileStructurePanel documents={docs} loading={false} showStatus dealId={dealId} getToken={getToken} onDeleted={dealData.silentRefresh} onAllDeleted={() => setSection("upload")} />
                         </div>
                       )
                     })()}
@@ -2716,7 +2757,9 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                           <span className="text-xs font-medium capitalize text-muted-foreground">
                             {uploadProgress.state === "completing"
                               ? "Finalizing…"
-                              : uploadProgress.state === "done"
+                              : uploadProgress.state === "detecting-duplicates"
+                                ? "Checking for duplicates…"
+                                : uploadProgress.state === "done"
                                 ? "Upload complete"
                                 : uploadProgress.state === "error"
                                   ? "Upload failed"
@@ -2883,7 +2926,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     dealId={dealId}
                     getToken={getToken}
                     onDeleted={dealData.silentRefresh}
-                    onAllResolved={() => setSection("file-structure")}
+                    onAllResolved={() => { setAllDuplicatesResolved(true); setSection("file-structure") }}
                   />
               )
             ) : null}
