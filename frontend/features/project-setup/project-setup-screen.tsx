@@ -1348,7 +1348,7 @@ function DuplicationPanel({
                         >
                           {deleting === m.document_id
                             ? <Loader2 className="size-4 animate-spin" />
-                            : <><Trash2 className="size-3.5" /> Delete</>}
+                            : <Trash2 className="size-3.5" />}
                         </button>
                       )}
                     </div>
