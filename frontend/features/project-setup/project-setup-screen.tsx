@@ -1207,12 +1207,14 @@ function DuplicationPanel({
   dealId,
   getToken,
   onDeleted,
+  onAllResolved,
 }: {
   groups: DuplicateGroup[]
   loading: boolean
   dealId: string | null
   getToken: () => Promise<string | null>
   onDeleted: () => void
+  onAllResolved?: () => void
 }) {
   const [deleting, setDeleting] = React.useState<string | null>(null)
   const [confirmDoc, setConfirmDoc] = React.useState<{ id: string; filename: string } | null>(null)
@@ -1279,6 +1281,14 @@ function DuplicationPanel({
   const visibleGroups = groups
     .map((g) => ({ ...g, members: g.members.filter((m) => !deletedIds.has(m.document_id)) }))
     .filter((g) => g.members.length >= 2)
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  React.useEffect(() => {
+    if (visibleGroups.length === 0 && groups.length > 0 && !loading) {
+      onAllResolved?.()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleGroups.length])
 
   return (
     <>
@@ -2873,6 +2883,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     dealId={dealId}
                     getToken={getToken}
                     onDeleted={dealData.silentRefresh}
+                    onAllResolved={() => setSection("file-structure")}
                   />
               )
             ) : null}
