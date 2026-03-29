@@ -36,7 +36,7 @@ def detect_hash_duplicates(deal_id: str) -> int:
 
     docs = (
         sb.table("documents")
-        .select("id, sha256_hash, filename")
+        .select("id, sha256_hash, filename, original_path")
         .eq("deal_id", deal_id)
         .execute()
     ).data
@@ -51,9 +51,18 @@ def detect_hash_duplicates(deal_id: str) -> int:
         if len(members) < 2:
             continue
         stem = os.path.splitext(members[0]["filename"])[0]
+        # Check if duplicates span multiple folders
+        folders = set(
+            os.path.dirname(m.get("original_path") or m.get("filename") or "").replace("\\", "/")
+            for m in members
+        )
+        if len(folders) > 1:
+            group_name = f"{stem} ({len(members)} copies, {len(folders)} folders)"
+        else:
+            group_name = stem
         group = sb.table("duplicate_groups").insert({
             "deal_id": deal_id,
-            "group_name": stem,
+            "group_name": group_name,
             "match_type": "exact",
         }).execute()
         group_id = group.data[0]["id"]

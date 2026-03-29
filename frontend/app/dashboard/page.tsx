@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Textarea } from "@/components/ui/textarea"
 import { ProjectSetupScreen } from "@/features/project-setup"
+import { HeaderNav } from "@/components/header-nav"
 import { useAuth } from "@clerk/nextjs"
 import { apiFetch } from "@/lib/api-client"
 import { useUserSync } from "@/hooks/use-user-sync"
@@ -147,6 +148,8 @@ export default function Page() {
   const [setupProjectTitle, setSetupProjectTitle] = React.useState("Untitled project")
   const [sidebarRefreshKey, setSidebarRefreshKey] = React.useState(0)
   const [newProjectDialogOpen, setNewProjectDialogOpen] = React.useState(false)
+  // Track whether the current project was just created (skip loading spinner for new empty projects)
+  const [isNewProject, setIsNewProject] = React.useState(false)
 
   // Derive current deal ID directly from URL
   const selectedDealId = searchParams.get("deal")
@@ -162,7 +165,9 @@ export default function Page() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDealId])
 
+  // When navigating to a project from the sidebar/list, clear the new-project flag
   const openDeal = (id: string, name: string) => {
+    setIsNewProject(false)
     setSetupProjectTitle(name)
     router.push(`/dashboard?deal=${id}`)
   }
@@ -174,51 +179,63 @@ export default function Page() {
   // Sync user to backend DB on first sign-in
   const { hasCompany } = useUserSync()
 
+  const handleBack = React.useCallback(() => {
+    goHome()
+    setSidebarRefreshKey((k) => k + 1)
+  }, [])
+
   return (
-    <SidebarProvider className="h-full">
-      {!selectedDealId && (
-        <AppSidebar
-          key={sidebarRefreshKey}
-          onHome={goHome}
-          onNewProject={() => setNewProjectDialogOpen(true)}
-          selectedDealId={selectedDealId}
-          onOpenDeal={openDeal}
-          onDealDeleted={(id) => {
-            if (selectedDealId === id) goHome()
-          }}
-        />
-      )}
-      <SidebarInset className="min-h-0">
-        {selectedDealId ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ProjectSetupScreen
-              dealId={selectedDealId}
-              projectTitle={setupProjectTitle}
-              hasCompany={hasCompany}
-              onBack={() => {
-                goHome()
-                setSidebarRefreshKey((k) => k + 1)
+    <div className="flex h-full flex-col">
+      <HeaderNav
+        projectTitle={selectedDealId ? setupProjectTitle : undefined}
+        onBack={selectedDealId ? handleBack : undefined}
+      />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <SidebarProvider className="h-full">
+          {!selectedDealId && (
+            <AppSidebar
+              key={sidebarRefreshKey}
+              onHome={goHome}
+              onNewProject={() => setNewProjectDialogOpen(true)}
+              selectedDealId={selectedDealId}
+              onOpenDeal={openDeal}
+              onDealDeleted={(id) => {
+                if (selectedDealId === id) goHome()
               }}
             />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome to DataRoom AI</h1>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Your projects will appear in the sidebar. Click the&nbsp;
-              <span className="font-medium text-foreground">+</span>&nbsp;button to create your first project.
-            </p>
-          </div>
-        )}
-      </SidebarInset>
-      <NewProjectDialog
-        open={newProjectDialogOpen}
-        onOpenChange={setNewProjectDialogOpen}
-        onCreate={(dealId, title) => {
-          setSidebarRefreshKey((k) => k + 1)
-          openDeal(dealId, title)
-        }}
-      />
-    </SidebarProvider>
+          )}
+          <SidebarInset className="min-h-0">
+            {selectedDealId ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <ProjectSetupScreen
+                  dealId={selectedDealId}
+                  projectTitle={setupProjectTitle}
+                  hasCompany={hasCompany}
+                  isNewProject={isNewProject}
+                  onBack={handleBack}
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+                <h1 className="text-2xl font-semibold tracking-tight">Welcome to <span className="bg-gradient-to-r from-primary to-violet-400 bg-clip-text text-transparent">DataRoom</span> AI</h1>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Your projects will appear in the sidebar. Click the&nbsp;
+                  <span className="font-medium text-foreground">+</span>&nbsp;button to create your first project.
+                </p>
+              </div>
+            )}
+          </SidebarInset>
+          <NewProjectDialog
+            open={newProjectDialogOpen}
+            onOpenChange={setNewProjectDialogOpen}
+            onCreate={(dealId, title) => {
+              setIsNewProject(true)
+              setSidebarRefreshKey((k) => k + 1)
+              openDeal(dealId, title)
+            }}
+          />
+        </SidebarProvider>
+      </div>
+    </div>
   )
 }

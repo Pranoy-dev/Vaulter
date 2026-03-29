@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useAuth, useUser, UserButton } from "@clerk/nextjs"
+import { useAuth, useUser } from "@clerk/nextjs"
 import { apiFetch } from "@/lib/api-client"
 import {
   Sidebar,
@@ -131,7 +131,7 @@ export function AppSidebar({
                   <GalleryVerticalEndIcon className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-medium">DataRoom AI</span>
+                  <span className="font-medium"><span className="bg-gradient-to-r from-primary to-violet-400 bg-clip-text text-transparent">DataRoom</span> AI</span>
                   <span className="">v1.0.0</span>
                 </div>
               </a>
@@ -206,8 +206,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="p-3">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-sidebar-accent transition-colors">
-          <UserButton afterSignOutUrl="/" />
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-[13px] font-medium leading-tight">
               {user?.fullName ?? user?.username ?? ""}

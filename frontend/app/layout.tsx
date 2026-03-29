@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -28,12 +29,15 @@ export default function RootLayout({
       <html
         lang="en"
         className={cn("h-full", "antialiased", geistMono.variable, "font-sans", geist.variable)}
+        suppressHydrationWarning
       >
         <body className="h-full overflow-hidden">
-          <TooltipProvider>
-            {children}
-          </TooltipProvider>
-          <Toaster position="bottom-center" richColors closeButton />
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
+            <Toaster position="bottom-center" richColors closeButton />
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

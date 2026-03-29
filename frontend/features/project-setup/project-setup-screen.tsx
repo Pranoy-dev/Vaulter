@@ -32,11 +32,14 @@ import {
   Building2,
   CheckCircle2,
   ChevronRight,
+  Clock,
   Copy,
   ChevronLeft,
   ExternalLink,
   Eye,
   File as FileIcon,
+  Files,
+  Shield,
   Trash2,
   FilePenLine,
   Folder,
@@ -46,8 +49,8 @@ import {
   LayoutGrid,
   Link2,
   Loader2,
-  PanelRightClose,
-  PanelRightOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RotateCcw,
   Sparkles,
@@ -72,10 +75,18 @@ export type SetupSection =
   | "lease-amendment"
 
 const sectionToggleItemClass =
-  "flex min-h-11 w-full min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 rounded-[11px] border-0 bg-transparent px-2 py-2.5 text-center text-[13px] font-medium leading-tight tracking-[-0.015em] text-zinc-500 antialiased transition-[color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1)] hover:bg-black/[0.03] hover:text-zinc-700 hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/15 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-100/80 disabled:pointer-events-none disabled:opacity-50 data-[state=on]:bg-white data-[state=on]:text-zinc-900 data-[state=on]:shadow-[0_1px_2px_rgba(0,0,0,0.05),0_3px_10px_rgba(0,0,0,0.06)] data-[state=on]:ring-1 data-[state=on]:ring-black/[0.05] data-[state=on]:hover:bg-white sm:min-h-9 sm:rounded-[10px] sm:px-2.5 sm:py-2 [&_svg]:size-[15px] [&_svg]:shrink-0 [&_svg]:text-zinc-400 [&_svg]:opacity-90 data-[state=on]:[&_svg]:text-zinc-600"
+  "flex min-h-11 w-full min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 rounded-[11px] border-0 bg-transparent px-2 py-2.5 text-center text-[13px] font-medium leading-tight tracking-[-0.015em] antialiased transition-[color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1)] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-9 sm:rounded-[10px] sm:px-2.5 sm:py-2 [&_svg]:size-[15px] [&_svg]:shrink-0 [&_svg]:opacity-90 " +
+  // light
+  "text-zinc-500 hover:bg-black/[0.03] hover:text-zinc-700 hover:shadow-none focus-visible:ring-zinc-900/15 focus-visible:ring-offset-zinc-100/80 data-[state=on]:bg-white data-[state=on]:text-zinc-900 data-[state=on]:shadow-[0_1px_2px_rgba(0,0,0,0.05),0_3px_10px_rgba(0,0,0,0.06)] data-[state=on]:ring-1 data-[state=on]:ring-black/[0.05] data-[state=on]:hover:bg-white [&_svg]:text-zinc-400 data-[state=on]:[&_svg]:text-zinc-600 " +
+  // dark
+  "dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-200 dark:focus-visible:ring-zinc-400/20 dark:focus-visible:ring-offset-zinc-800 dark:data-[state=on]:bg-zinc-700 dark:data-[state=on]:text-zinc-100 dark:data-[state=on]:shadow-[0_1px_3px_rgba(0,0,0,0.3)] dark:data-[state=on]:ring-1 dark:data-[state=on]:ring-white/[0.08] dark:data-[state=on]:hover:bg-zinc-700 dark:[&_svg]:text-zinc-500 dark:data-[state=on]:[&_svg]:text-zinc-300"
 
 const sectionToggleGroupClass =
-  "flex w-full flex-col gap-1.5 rounded-[14px] border border-zinc-200/90 bg-zinc-100/95 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),inset_0_-1px_0_rgba(0,0,0,0.02)] backdrop-blur-xl sm:flex-row sm:items-stretch sm:gap-1 sm:rounded-[13px]"
+  "flex w-full flex-col gap-1.5 rounded-[14px] border p-1 backdrop-blur-xl sm:flex-row sm:items-stretch sm:gap-1 sm:rounded-[13px] " +
+  // light
+  "border-zinc-200/90 bg-zinc-100/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),inset_0_-1px_0_rgba(0,0,0,0.02)] " +
+  // dark
+  "dark:border-white/[0.08] dark:bg-zinc-800/80 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_-1px_0_rgba(0,0,0,0.15)]"
 
 function ClickTooltip({ content, children }: { content: string; children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false)
@@ -198,7 +209,7 @@ function StatusChatLog({
 
   // ── Processing status ──────────────────────────────────────────────────
   if (processingJob.status === "pending") {
-    entries.push({ key: "proc-pending", text: "Processing queued — waiting to start…", icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    entries.push({ key: "proc-pending", text: "Processing queued — waiting to start…", icon: <Clock className="size-3 opacity-70" />, accent: "border-blue-500/50" })
   } else if (processingJob.status === "running") {
     const stage = processingJob.currentStage
     const pct = Math.round(processingJob.progress * 100)
@@ -391,12 +402,12 @@ function StatusChatLog({
 
   return (
     <div className="px-2 py-2">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">System</p>
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">System</p>
       <div className="space-y-0.5">
         {entries.map((e) => (
           <div
             key={e.key}
-            className={`flex items-center gap-2 border-l-2 ${e.accent} py-1 pl-2.5 pr-2 font-mono text-[11px] leading-snug text-white/50`}
+            className={`flex items-center gap-2 border-l-2 ${e.accent} py-1 pl-2.5 pr-2 font-mono text-[11px] leading-snug text-muted-foreground/70`}
           >
             <span className="shrink-0">{e.icon}</span>
             <span className="truncate">{e.text}</span>
@@ -1220,8 +1231,9 @@ function DuplicationPanel({
       <div className="space-y-2 pr-1">
         {visibleGroups.map((group) => (
           <div key={group.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
+            {/* Group header */}
             <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
-              <Copy className="size-3.5 shrink-0 text-muted-foreground" />
+              <Files className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs font-medium" title={group.group_name}>
                 {group.group_name}
               </span>
@@ -1233,52 +1245,116 @@ function DuplicationPanel({
                 {group.match_type === "exact" ? "Identical File" : "Content Match"}
               </span>
             </div>
+            {/* Column headers */}
+            <div className="grid grid-cols-[28px_1fr_auto_110px_80px] items-center gap-x-2 border-b border-border/30 bg-muted/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/50">
+              <span />
+              <span>File</span>
+              <span>Reason</span>
+              <span className="text-center">Status</span>
+              <span className="text-right">Action</span>
+            </div>
+            {/* Rows */}
             <div className="divide-y divide-border/30">
-              {group.members.map((m) => (
-                <div key={m.id} className="flex items-center gap-2 px-3 py-1.5">
-                  {m.is_canonical
-                    ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
-                    : <FileIcon className="size-3 shrink-0 text-muted-foreground/50" />
-                  }
-                  <button
-                    type="button"
-                    onClick={(e) => handleFileClick(e, m)}
-                    disabled={loadingPreview === m.document_id}
-                    className="group min-w-0 flex-1 flex items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                    title="Click to preview · Ctrl+click to open in new tab"
-                  >
-                    {loadingPreview === m.document_id
-                      ? <Loader2 className="size-3 shrink-0 animate-spin" />
-                      : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" />}
-                    <span className="truncate">{m.filename ?? m.original_path ?? "Unknown"}</span>
-                  </button>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {!m.is_canonical && group.match_type === "near" && m.similarity_score != null && (
-                      <span className="text-[11px] tabular-nums font-medium text-amber-600 dark:text-amber-400">
-                        {Math.round(m.similarity_score * 100)}%
+              {group.members.map((m) => {
+                // Build reason text
+                const reason = m.is_canonical
+                  ? group.match_type === "exact"
+                    ? "First copy found — retained as reference"
+                    : "Reference document for this group"
+                  : group.match_type === "exact"
+                    ? "Byte-for-byte identical to the keeper"
+                    : m.similarity_score != null
+                      ? `${Math.round(m.similarity_score * 100)}% content similarity to the keeper`
+                      : "Similar content to the keeper"
+
+                return (
+                  <div key={m.id} className="grid grid-cols-[28px_1fr_auto_110px_80px] items-center gap-x-2 px-3 py-2">
+                    {/* Col 1: icon */}
+                    <div className="flex items-center justify-center">
+                      {m.is_canonical
+                        ? <Shield className="size-3.5 shrink-0 text-green-500" />
+                        : <Files className="size-3.5 shrink-0 text-muted-foreground/40" />
+                      }
+                    </div>
+
+                    {/* Col 2: folder + filename (clickable preview) */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleFileClick(e, m)}
+                      disabled={loadingPreview === m.document_id}
+                      className="group min-w-0 flex items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                      title={m.original_path ?? m.filename ?? ""}
+                    >
+                      {loadingPreview === m.document_id
+                        ? <Loader2 className="size-3 shrink-0 animate-spin" />
+                        : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" />}
+                      <span className="min-w-0 flex flex-col leading-tight">
+                        {(() => {
+                          const fullPath = (m.original_path ?? m.filename ?? "Unknown").replace(/\\/g, "/")
+                          const parts = fullPath.split("/")
+                          const fname = parts.pop() ?? fullPath
+                          const folder = parts.join(" / ")
+                          return folder ? (
+                            <>
+                              <span className="truncate text-[10px] opacity-50">📁 {folder}</span>
+                              <span className="truncate">{fname}</span>
+                            </>
+                          ) : (
+                            <span className="truncate">{fname}</span>
+                          )
+                        })()}
                       </span>
-                    )}
-                    <span className="w-16 text-right text-[11px] tabular-nums text-muted-foreground/40">
-                      {m.file_size != null ? formatBytes(m.file_size) : ""}
+                    </button>
+
+                    {/* Col 3: reason */}
+                    <span className="min-w-0 truncate text-[11px] text-muted-foreground/60 italic max-w-[220px]">
+                      {reason}
                     </span>
-                    {m.is_canonical ? (
-                      <span className="w-16 text-right text-[11px] text-green-600">canonical</span>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={deleting === m.document_id}
-                        onClick={() => setConfirmDoc({ id: m.document_id, filename: m.filename ?? m.original_path ?? "this file" })}
-                        className="w-16 flex justify-end text-muted-foreground/40 hover:text-red-500 transition-colors disabled:opacity-40"
-                        title="Delete duplicate"
-                      >
-                        {deleting === m.document_id
-                          ? <Loader2 className="size-3.5 animate-spin" />
-                          : <Trash2 className="size-3.5" />}
-                      </button>
-                    )}
+
+                    {/* Col 4: status badge */}
+                    <div className="flex justify-center">
+                      {m.is_canonical ? (
+                        <HoverTooltip content="This is the original copy — the one that will be kept. Delete the duplicates to clean up.">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/40 dark:text-green-400 cursor-default">
+                            <Shield className="size-2.5" />
+                            Keeper
+                          </span>
+                        </HoverTooltip>
+                      ) : (
+                        <HoverTooltip content={group.match_type === "exact" ? "Exact byte-for-byte copy — safe to delete." : "Near-duplicate based on content similarity."}>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium cursor-default ${
+                            group.match_type === "exact"
+                              ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                              : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                          }`}>
+                            <Files className="size-2.5" />
+                            {group.match_type === "exact" ? "Duplicate" : "Similar"}
+                          </span>
+                        </HoverTooltip>
+                      )}
+                    </div>
+
+                    {/* Col 5: action */}
+                    <div className="flex justify-end">
+                      {m.is_canonical ? (
+                        <span className="text-[11px] text-muted-foreground/30 pr-1">—</span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={deleting === m.document_id}
+                          onClick={() => setConfirmDoc({ id: m.document_id, filename: m.filename ?? m.original_path ?? "this file" })}
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground/50 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 transition-colors disabled:opacity-40"
+                          title="Delete this duplicate"
+                        >
+                          {deleting === m.document_id
+                            ? <Loader2 className="size-3.5 animate-spin" />
+                            : <><Trash2 className="size-3" /> Delete</>}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))}
@@ -1679,10 +1755,11 @@ export type ProjectSetupScreenProps = {
   dealId: string | null
   projectTitle: string
   hasCompany: boolean
+  isNewProject?: boolean
   onBack: () => void
 }
 
-export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }: ProjectSetupScreenProps) {
+export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProject = false, onBack }: ProjectSetupScreenProps) {
   const { getToken } = useAuth()
   const [section, setSection] = React.useState<SetupSection>("upload")
   const [chatOpen, setChatOpen] = React.useState(true)
@@ -1940,6 +2017,17 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
 
   const isUploading = ["initializing", "uploading", "completing"].includes(uploadProgress.state)
 
+  // Show a full-screen loader when opening an existing project (not a fresh new one).
+  // Must be after all hooks.
+  if (!isNewProject && dealData.loading) {
+    return (
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="size-7 animate-spin" />
+        <p className="text-sm">Loading project…</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/20">
       {/* Upload card: confirm delete dialog */}
@@ -1969,29 +2057,12 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
           <iframe src={uploadPreview?.url} className="w-full border-0" style={{ height: "85vh" }} title={uploadPreview?.title} />
         </DialogContent>
       </Dialog>
-      {/* Top navigation bar */}
-      <nav className="relative flex shrink-0 items-center border-b border-border/60 bg-background/80 px-3 py-2 backdrop-blur-sm">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
-          onClick={onBack}
-        >
-          <ArrowLeft className="size-3.5" />
-          Projects
-        </Button>
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="max-w-xs truncate text-sm font-semibold tracking-tight">{projectTitle}</span>
-        </div>
-      </nav>
-
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row md:items-stretch">
 
         {/* Chat panel — left side, collapsible */}
         {chatOpen ? (
           <Card
-            className="dark group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent [color-scheme:dark] md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-white/[0.09] md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)]"
+            className="group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-border/50 md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)]"
             style={{ width: chatWidth }}
           >
             {/* Drag handle on the right border */}
@@ -2001,23 +2072,23 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               aria-hidden
             >
               <div className="m-auto flex h-16 w-full items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100">
-                <GripVertical className="size-4 text-white/50" />
+                <GripVertical className="size-4 text-foreground/30" />
               </div>
             </div>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-0 p-0">
-              <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.09] px-2 py-2.5 md:px-3">
+              <header className="flex shrink-0 items-center gap-2 border-b border-border/50 px-2 py-2.5 md:px-3">
                 <h2 className="min-w-0 flex-1 truncate text-center text-sm font-semibold tracking-tight text-foreground">
-                  AI Assistant
+                  <span className="bg-gradient-to-r from-primary to-violet-400 bg-clip-text text-transparent">DataRoom</span> AI Assistant
                 </h2>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-8 shrink-0 text-foreground/60 hover:bg-white/10 hover:text-foreground"
+                  className="size-8 shrink-0 text-foreground/50 hover:bg-muted hover:text-foreground"
                   onClick={() => setChatOpen(false)}
                   aria-label="Collapse chat"
                 >
-                  <PanelRightClose className="size-4" />
+                  <PanelLeftClose className="size-4" />
                 </Button>
               </header>
               <div className="min-h-0 flex-1">
@@ -2030,16 +2101,16 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
             </CardContent>
           </Card>
         ) : (
-          <div className="dark hidden shrink-0 flex-col items-center border-r border-white/[0.09] bg-card py-2 [color-scheme:dark] md:flex md:w-7">
+          <div className="hidden shrink-0 flex-col items-center border-r border-border/50 bg-card py-2 md:flex md:w-7">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="size-8 text-foreground/60 hover:bg-white/10 hover:text-foreground"
+              className="size-8 text-foreground/50 hover:bg-muted hover:text-foreground"
               onClick={() => setChatOpen(true)}
               aria-label="Open chat"
             >
-              <PanelRightOpen className="size-4" />
+              <PanelLeftOpen className="size-4" />
             </Button>
           </div>
         )}
@@ -2127,7 +2198,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg px-0.5 pt-1 pb-1 md:px-1">
             {section === "upload" ? (
-              <div className="space-y-3">
+              <div className={showDropzone && selectedFiles.length === 0 && dealData.documents.length === 0 ? "flex flex-1 flex-col items-center justify-center" : "space-y-3"}>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -2328,7 +2399,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={onDrop}
-                    className={`flex min-h-48 cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed px-8 py-10 text-center transition-all duration-200 ${
+                    className={`w-full max-w-lg md:max-w-2xl flex min-h-48 md:min-h-72 cursor-pointer flex-col items-center justify-center gap-4 md:gap-6 rounded-2xl border-2 border-dashed px-8 py-10 md:py-16 text-center transition-all duration-200 ${
                       isDragging
                         ? "border-primary/80 bg-primary/5 shadow-[0_0_0_4px_hsl(var(--primary)/0.08)]"
                         : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
