@@ -139,6 +139,7 @@ function ChatInstance({
   chatPrepend,
   dealId,
   initialSessionId,
+  getToken,
   onNewChat,
   onDeleteChat,
   onOpenHistory,
@@ -148,6 +149,7 @@ function ChatInstance({
   chatPrepend?: ReactNode
   dealId?: string | null
   initialSessionId: string
+  getToken: () => Promise<string | null>
   onNewChat: () => void
   onDeleteChat: (sessionId: string) => void
   onOpenHistory: () => void
@@ -171,6 +173,7 @@ function ChatInstance({
   const runtime = useChatRuntime({ transport })
 
   const [hasSentMessage, setHasSentMessage] = React.useState(false)
+  const [sessionTitle, setSessionTitle] = React.useState<string | null>(null)
   React.useEffect(() => {
     return runtime.thread.subscribe(() => {
       const msgs = runtime.thread.getState().messages
@@ -178,12 +181,50 @@ function ChatInstance({
     })
   }, [runtime])
 
+  // Fetch the backend-generated session title once an assistant message arrives.
+  // The backend generates it asynchronously, so we retry a few times.
+  const hasAssistantMsg = React.useRef(false)
+  const cancelTitleFetch = React.useRef(false)
+  React.useEffect(() => {
+    cancelTitleFetch.current = false
+    const unsubscribe = runtime.thread.subscribe(async () => {
+      const msgs = runtime.thread.getState().messages
+      const assistantArrived = msgs.some((m) => m.role === "assistant")
+      if (!assistantArrived || hasAssistantMsg.current || !dealId) return
+      hasAssistantMsg.current = true
+      const fetchTitle = async (attempt = 0) => {
+        if (cancelTitleFetch.current) return
+        try {
+          const token = await getToken()
+          if (!token || cancelTitleFetch.current) return
+          const res = await fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/sessions`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          const body = await res.json()
+          const session = (body.data ?? []).find((s: ChatSession) => s.id === sessionId)
+          if (cancelTitleFetch.current) return
+          if (session?.title) {
+            setSessionTitle(session.title)
+          } else if (attempt < 5) {
+            setTimeout(() => fetchTitle(attempt + 1), 2000)
+          }
+        } catch {}
+      }
+      // Small initial delay to let backend finish saving + generating title
+      setTimeout(() => fetchTitle(), 1500)
+    })
+    return () => {
+      cancelTitleFetch.current = true
+      unsubscribe()
+    }
+  }, [runtime, dealId, getToken, sessionId])
+
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex h-full min-h-0 min-w-0 flex-col">
         {/* Chat action bar */}
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Chat</span>
+          <span className="max-w-[140px] truncate text-xs font-medium text-muted-foreground" title={sessionTitle ?? undefined}>{sessionTitle ?? "Chat"}</span>
           <div className="flex items-center gap-1">
             {hasSentMessage && dealId && (
               <Button
@@ -308,6 +349,7 @@ export function ProjectSetupAssistant({
         chatPrepend={chatPrepend}
         dealId={dealId}
         initialSessionId={activeSessionId}
+        getToken={getToken}
         onNewChat={handleNewChat}
         onDeleteChat={handleDeleteChat}
         onOpenHistory={() => setHistoryOpen(true)}

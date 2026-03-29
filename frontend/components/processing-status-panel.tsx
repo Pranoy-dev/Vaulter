@@ -171,10 +171,10 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <div className="flex items-center gap-2">
-          {isActive && <Loader2 className="size-3.5 animate-spin text-primary" />}
-          {job.status === "completed" && <CheckCircle2 className="size-3.5 text-green-600" />}
-          {hasError && <AlertCircle className="size-3.5 text-destructive" />}
-          {job.status === "pending" && !isActive && <CircleDashed className="size-3.5 text-muted-foreground/50" />}
+          {isActive && <Loader2 className="size-4 animate-spin text-primary" />}
+          {job.status === "completed" && <CheckCircle2 className="size-4 text-green-600" />}
+          {hasError && <AlertCircle className="size-4 text-destructive" />}
+          {job.status === "pending" && !isActive && <CircleDashed className="size-4 text-muted-foreground/50" />}
           <span className="text-xs font-semibold">
             {job.status === "completed"
               ? "Processing complete"
@@ -192,7 +192,7 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
             className="h-7 gap-1.5 text-xs"
             onClick={triggerProcessing}
           >
-            <RefreshCw className="size-3" />
+            <RefreshCw className="size-3.5" />
             Retry
           </Button>
         )}

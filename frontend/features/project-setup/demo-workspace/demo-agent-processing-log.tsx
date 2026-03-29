@@ -28,7 +28,7 @@ export function DemoAgentProcessingLog() {
               "group-data-[state=open]/coll:bg-white/[0.05] hover:bg-white/[0.06]"
             )}
           >
-            <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-white/50 transition-transform group-data-[state=open]/coll:rotate-90" />
+            <ChevronRight className="mt-0.5 size-4 shrink-0 text-white/50 transition-transform group-data-[state=open]/coll:rotate-90" />
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-white/90">{entry.title}</div>
               <div className="text-[11px] leading-snug text-white/50">{entry.summary}</div>

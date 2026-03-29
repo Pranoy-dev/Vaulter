@@ -77,7 +77,7 @@ function DeleteProjectDialog({
             disabled={loading}
             className="bg-destructive text-white hover:bg-destructive/90"
           >
-            {loading ? <><Loader2 className="size-3.5 animate-spin" /> Deleting…</> : "Delete Project"}
+            {loading ? <><Loader2 className="size-4 animate-spin" /> Deleting…</> : "Delete Project"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -162,7 +162,7 @@ export function AppSidebar({
             {loading ? (
               <SidebarMenuItem>
                 <div className="flex items-center gap-2 px-2 py-1.5">
-                  <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">Loading…</span>
                 </div>
               </SidebarMenuItem>
@@ -197,7 +197,7 @@ export function AppSidebar({
                     onClick={(e) => { e.stopPropagation(); setPendingDelete(deal) }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 opacity-0 transition-opacity group-hover/deal-item:opacity-100 hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                   >
-                    <Trash2Icon className="size-3.5" />
+                    <Trash2Icon className="size-4" />
                   </button>
                 </SidebarMenuItem>
               ))

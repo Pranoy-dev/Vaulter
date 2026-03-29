@@ -159,7 +159,7 @@ const ComposerAction: FC = () => {
             className="aui-composer-cancel size-8 rounded-full"
             aria-label="Stop generating"
           >
-            <SquareIcon className="aui-composer-cancel-icon size-3 fill-current" />
+            <SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />
           </Button>
         </ComposerPrimitive.Cancel>
       </AuiIf>

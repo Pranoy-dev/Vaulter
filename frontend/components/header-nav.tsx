@@ -24,7 +24,7 @@ export function HeaderNav({
             className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
             onClick={onBack}
           >
-            <ArrowLeft className="size-3.5" />
+            <ArrowLeft className="size-4" />
             Projects
           </Button>
         ) : (

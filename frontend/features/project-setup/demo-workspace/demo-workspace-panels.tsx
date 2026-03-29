@@ -923,19 +923,19 @@ export function DemoDuplicatesPanel() {
 
 function leaseTimelineDot(kind: DemoLeaseTimelineKind) {
   if (kind === "lease") {
-    return <span className="size-3 shrink-0 rounded-full border-2 border-white bg-blue-600 shadow-sm ring-2 ring-blue-100" />
+    return <span className="size-3.5 shrink-0 rounded-full border-2 border-white bg-blue-600 shadow-sm ring-2 ring-blue-100" />
   }
   if (kind === "orphaned") {
     return (
-      <span className="size-3 shrink-0 rounded-full border-2 border-amber-500 bg-white shadow-sm" />
+      <span className="size-3.5 shrink-0 rounded-full border-2 border-amber-500 bg-white shadow-sm" />
     )
   }
   if (kind === "sideLetter") {
     return (
-      <span className="size-3 shrink-0 rounded-full border-2 border-pink-400 bg-white shadow-sm" />
+      <span className="size-3.5 shrink-0 rounded-full border-2 border-pink-400 bg-white shadow-sm" />
     )
   }
-  return <span className="size-3 shrink-0 rounded-full border-2 border-zinc-300 bg-white shadow-sm" />
+  return <span className="size-3.5 shrink-0 rounded-full border-2 border-zinc-300 bg-white shadow-sm" />
 }
 
 function leaseDocBadgeClass(badge: DemoLeaseDocRow["badge"]) {

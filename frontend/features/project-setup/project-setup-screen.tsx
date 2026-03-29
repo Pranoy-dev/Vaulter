@@ -145,7 +145,7 @@ function StatusChatLog({
       entries.push({
         key: `${keyPrefix}-folders`,
         text: `📁 ${folders.join(" / ")}`,
-        icon: <FileIcon className="size-3 opacity-40" />,
+        icon: <FileIcon className="size-3.5 opacity-40" />,
         accent: "border-transparent",
       })
     }
@@ -165,7 +165,7 @@ function StatusChatLog({
   }, [documents])
   // ── Upload status ──────────────────────────────────────────────────────
   if (uploadProgress.state === "initializing") {
-    entries.push({ key: "upload-init", text: "Preparing upload…", icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    entries.push({ key: "upload-init", text: "Preparing upload…", icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
   } else if (uploadProgress.state === "uploading") {
     const fileEntries = Object.values(uploadProgress.files)
     const fileCount = fileEntries.length
@@ -173,13 +173,13 @@ function StatusChatLog({
     entries.push({
       key: "upload-progress",
       text: `Uploading files — ${uploadProgress.overall}%`,
-      icon: <Loader2 className="size-3 animate-spin" />,
+      icon: <Loader2 className="size-3.5 animate-spin" />,
       accent: "border-blue-500/50",
     })
     entries.push({
       key: "upload-count",
       text: `↳ ${doneCount} of ${fileCount} file${fileCount !== 1 ? "s" : ""} done`,
-      icon: <FileIcon className="size-3 opacity-50" />,
+      icon: <FileIcon className="size-3.5 opacity-50" />,
       accent: "border-transparent",
     })
     // Show the file currently in progress
@@ -188,43 +188,43 @@ function StatusChatLog({
       pushFilePath(
         "upload-current",
         current.relativePath,
-        <Loader2 className="size-3 animate-spin opacity-60" />,
+        <Loader2 className="size-3.5 animate-spin opacity-60" />,
         "border-transparent",
         `(${Math.round(current.progress * 100)}%)`,
       )
     }
   } else if (uploadProgress.state === "completing") {
-    entries.push({ key: "upload-completing", text: "Finalizing upload…", icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    entries.push({ key: "upload-completing", text: "Finalizing upload…", icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
   } else if (uploadProgress.state === "done") {
     const count = Object.keys(uploadProgress.files).length
     entries.push({
       key: "upload-done",
       text: `Upload complete — ${count} file${count !== 1 ? "s" : ""} ready`,
-      icon: <CheckCircle2 className="size-3" />,
+      icon: <CheckCircle2 className="size-3.5" />,
       accent: "border-green-500/50",
     })
   } else if (uploadProgress.state === "error") {
-    entries.push({ key: "upload-error", text: `Upload failed: ${(uploadProgress as any).error ?? "Unknown error"}`, icon: <AlertTriangle className="size-3" />, accent: "border-red-500/50" })
+    entries.push({ key: "upload-error", text: `Upload failed: ${(uploadProgress as any).error ?? "Unknown error"}`, icon: <AlertTriangle className="size-3.5" />, accent: "border-red-500/50" })
   }
 
   // ── Processing status ──────────────────────────────────────────────────
   if (processingJob.status === "pending") {
-    entries.push({ key: "proc-pending", text: "Processing queued — waiting to start…", icon: <Clock className="size-3 opacity-70" />, accent: "border-blue-500/50" })
+    entries.push({ key: "proc-pending", text: "Processing queued — waiting to start…", icon: <Clock className="size-3.5 opacity-70" />, accent: "border-blue-500/50" })
   } else if (processingJob.status === "running") {
     const stage = processingJob.currentStage
     const pct = Math.round(processingJob.progress * 100)
 
     if (stage === "indexing") {
-      entries.push({ key: "proc-indexing", text: `Indexing documents for search… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-indexing", text: `Indexing documents for search… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     } else if (stage === "detecting_hash_duplicates") {
-      entries.push({ key: "proc-hash", text: `Scanning for identical files by hash… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-hash", text: `Scanning for identical files by hash… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     } else if (stage === "document_processing") {
       const subLabel = processingJob.subStage === "ai_processing"
         ? "AI Classification"
         : processingJob.subStage === "rag_processing"
           ? "RAG Embedding"
           : "AI Processing"
-      entries.push({ key: "proc-doc", text: `${subLabel}… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-doc", text: `${subLabel}… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
 
       if (processingJob.aiDetail) {
         const { current, total } = processingJob.aiDetail
@@ -232,7 +232,7 @@ function StatusChatLog({
         entries.push({
           key: "proc-ai",
           text: `↳ AI classify  ${bar}  ${current}/${total}`,
-          icon: <FileIcon className="size-3 opacity-50" />,
+          icon: <FileIcon className="size-3.5 opacity-50" />,
           accent: "border-transparent",
         })
       }
@@ -242,7 +242,7 @@ function StatusChatLog({
         entries.push({
           key: "proc-rag",
           text: `↳ RAG embed    ${bar}  ${current}/${total}`,
-          icon: <FileIcon className="size-3 opacity-50" />,
+          icon: <FileIcon className="size-3.5 opacity-50" />,
           accent: "border-transparent",
         })
       }
@@ -250,7 +250,7 @@ function StatusChatLog({
         pushFilePath(
           "proc-file",
           processingJob.currentFile,
-          <Loader2 className="size-3 animate-spin opacity-40" />,
+          <Loader2 className="size-3.5 animate-spin opacity-40" />,
           "border-transparent",
         )
       }
@@ -263,20 +263,20 @@ function StatusChatLog({
           entries.push({
             key: "last-file-folder",
             text: `Last: 📁 ${lcFolders.join(" / ")}`,
-            icon: <CheckCircle2 className="size-3 opacity-60" />,
+            icon: <CheckCircle2 className="size-3.5 opacity-60" />,
             accent: "border-violet-500/40",
           })
           entries.push({
             key: "last-file-name",
             text: `↳ ${lcFilename}`,
-            icon: <FileIcon className="size-3 opacity-40" />,
+            icon: <FileIcon className="size-3.5 opacity-40" />,
             accent: "border-violet-500/40",
           })
         } else {
           entries.push({
             key: "last-file-name",
             text: `Last: ${lcFilename}`,
-            icon: <CheckCircle2 className="size-3 opacity-60" />,
+            icon: <CheckCircle2 className="size-3.5 opacity-60" />,
             accent: "border-violet-500/40",
           })
         }
@@ -284,7 +284,7 @@ function StatusChatLog({
         entries.push({
           key: "last-file-cat",
           text: `↳ ${catLabel} (${conf}% confidence)`,
-          icon: <FileIcon className="size-3 opacity-40" />,
+          icon: <FileIcon className="size-3.5 opacity-40" />,
           accent: "border-transparent",
         })
         // Classification reasoning (truncated)
@@ -295,7 +295,7 @@ function StatusChatLog({
           entries.push({
             key: "last-file-reason",
             text: `↳ Why: ${reason}`,
-            icon: <FileIcon className="size-3 opacity-30" />,
+            icon: <FileIcon className="size-3.5 opacity-30" />,
             accent: "border-transparent",
           })
         }
@@ -305,7 +305,7 @@ function StatusChatLog({
           entries.push({
             key: "last-file-parties",
             text: `↳ Parties: ${partyList}`,
-            icon: <FileIcon className="size-3 opacity-30" />,
+            icon: <FileIcon className="size-3.5 opacity-30" />,
             accent: "border-transparent",
           })
         }
@@ -314,7 +314,7 @@ function StatusChatLog({
           entries.push({
             key: "last-file-expiry",
             text: `↳ Expires: ${lastClassified.expiry_date}`,
-            icon: <FileIcon className="size-3 opacity-30" />,
+            icon: <FileIcon className="size-3.5 opacity-30" />,
             accent: "border-transparent",
           })
         }
@@ -326,7 +326,7 @@ function StatusChatLog({
           entries.push({
             key: "last-file-traits",
             text: `↳ ${docTraits.join("  ·  ")}`,
-            icon: <CheckCircle2 className="size-3 opacity-30" />,
+            icon: <CheckCircle2 className="size-3.5 opacity-30" />,
             accent: "border-transparent",
           })
         }
@@ -335,7 +335,7 @@ function StatusChatLog({
           entries.push({
             key: "last-file-empty",
             text: "↳ ⚠ No content extracted — file may be empty or unreadable",
-            icon: <AlertTriangle className="size-3 opacity-50" />,
+            icon: <AlertTriangle className="size-3.5 opacity-50" />,
             accent: "border-amber-500/40",
           })
         }
@@ -346,7 +346,7 @@ function StatusChatLog({
               entries.push({
                 key: `last-file-incomplete-${i}`,
                 text: `↳ ⚠ Incomplete: ${r}`,
-                icon: <AlertTriangle className="size-3 opacity-50" />,
+                icon: <AlertTriangle className="size-3.5 opacity-50" />,
                 accent: "border-amber-500/40",
               })
             })
@@ -354,7 +354,7 @@ function StatusChatLog({
             entries.push({
               key: "last-file-incomplete",
               text: "↳ ⚠ Document appears incomplete",
-              icon: <AlertTriangle className="size-3 opacity-50" />,
+              icon: <AlertTriangle className="size-3.5 opacity-50" />,
               accent: "border-amber-500/40",
             })
           }
@@ -364,38 +364,38 @@ function StatusChatLog({
           entries.push({
             key: "last-file-error",
             text: `↳ Error: ${lastClassified.processing_error}`,
-            icon: <AlertTriangle className="size-3 opacity-50" />,
+            icon: <AlertTriangle className="size-3.5 opacity-50" />,
             accent: "border-red-500/40",
           })
         }
       }
     } else if (stage === "detecting_duplicates") {
-      entries.push({ key: "proc-dup", text: `Comparing document content for duplicates… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-dup", text: `Comparing document content for duplicates… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     } else if (stage === "linking_documents") {
-      entries.push({ key: "proc-lease", text: `Building lease amendment chains… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-lease", text: `Building lease amendment chains… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     } else if (stage === "building_overview") {
-      entries.push({ key: "proc-overview", text: `Computing summaries and statistics… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-overview", text: `Computing summaries and statistics… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     } else {
-      entries.push({ key: "proc-running", text: `Processing… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-running", text: `Processing… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     }
   } else if (processingJob.status === "completed") {
-    entries.push({ key: "proc-done", text: "All processing complete", icon: <CheckCircle2 className="size-3" />, accent: "border-green-500/50" })
+    entries.push({ key: "proc-done", text: "All processing complete", icon: <CheckCircle2 className="size-3.5" />, accent: "border-green-500/50" })
     const totalDocs = documents.length
     const emptyCount = documents.filter((d) => d.is_empty).length
     const incompleteCount = documents.filter((d) => d.is_incomplete).length
     const ragCount = documents.filter((d) => d.rag_indexed).length
-    entries.push({ key: "proc-summary", text: `↳ ${ragCount}/${totalDocs} docs indexed for chat`, icon: <CheckCircle2 className="size-3 opacity-40" />, accent: "border-transparent" })
-    if (emptyCount > 0) entries.push({ key: "proc-empty", text: `↳ ${emptyCount} empty file${emptyCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3 opacity-40" />, accent: "border-transparent" })
-    if (incompleteCount > 0) entries.push({ key: "proc-incomplete", text: `↳ ${incompleteCount} incomplete file${incompleteCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3 opacity-40" />, accent: "border-transparent" })
-    entries.push({ key: "proc-hint", text: "↳ Chat is ready — ask anything about the documents", icon: <CheckCircle2 className="size-3 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-summary", text: `↳ ${ragCount}/${totalDocs} docs indexed for chat`, icon: <CheckCircle2 className="size-3.5 opacity-40" />, accent: "border-transparent" })
+    if (emptyCount > 0) entries.push({ key: "proc-empty", text: `↳ ${emptyCount} empty file${emptyCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3.5 opacity-40" />, accent: "border-transparent" })
+    if (incompleteCount > 0) entries.push({ key: "proc-incomplete", text: `↳ ${incompleteCount} incomplete file${incompleteCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3.5 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-hint", text: "↳ Chat is ready — ask anything about the documents", icon: <CheckCircle2 className="size-3.5 opacity-40" />, accent: "border-transparent" })
   } else if (processingJob.status === "failed") {
     entries.push({
       key: "proc-failed",
       text: `Processing failed${processingJob.errorMessage ? `: ${processingJob.errorMessage}` : ""}`,
-      icon: <AlertTriangle className="size-3" />,
+      icon: <AlertTriangle className="size-3.5" />,
       accent: "border-red-500/50",
     })
-    entries.push({ key: "proc-retry", text: "↳ Use the Retry button in the Classification tab", icon: <AlertTriangle className="size-3 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-retry", text: "↳ Use the Retry button in the Classification tab", icon: <AlertTriangle className="size-3.5 opacity-40" />, accent: "border-transparent" })
   }
 
   if (entries.length === 0) return null
@@ -617,11 +617,11 @@ function TreeNodeRow({
           style={{ paddingLeft: `${8 + indent}px` }}
         >
           <ChevronRight
-            className={`size-3.5 shrink-0 text-muted-foreground/50 transition-transform duration-150 ${
+            className={`size-4 shrink-0 text-muted-foreground/50 transition-transform duration-150 ${
               open ? "rotate-90" : ""
             }`}
           />
-          <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+          <Folder className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-left" title={node.name}>{node.name}</span>
           {totalFiles === 0 ? (
             <span className="shrink-0 text-[11px] text-muted-foreground/30 italic">empty</span>
@@ -637,7 +637,7 @@ function TreeNodeRow({
           className="shrink-0 rounded p-1 mr-1 text-muted-foreground/30 opacity-0 group-hover/folder:opacity-100 hover:text-red-500 transition-all"
           title="Delete folder"
         >
-          <Trash2 className="size-3" />
+          <Trash2 className="size-3.5" />
         </button>
       )}
       </div>
@@ -657,14 +657,14 @@ function TreeNodeRow({
             className="group/filerow flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted/30 cursor-default active:opacity-50"
             style={{ paddingLeft: `${8 + indent + 20}px` }}
           >
-            <GripVertical className="size-3.5 shrink-0 text-muted-foreground/20 opacity-0 group-hover/filerow:opacity-100 cursor-grab active:cursor-grabbing transition-opacity" />
+            <GripVertical className="size-4 shrink-0 text-muted-foreground/20 opacity-0 group-hover/filerow:opacity-100 cursor-grab active:cursor-grabbing transition-opacity" />
             {movingId === doc.id
-              ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+              ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
               : showStatus && doc.processing_status === "processing"
-                ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+                ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
                 : showStatus && (doc.classification_confidence > 0 || doc.processing_status === "completed")
-                  ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
-                  : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
+                  ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                  : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/40" />}
             {onPreview ? (
               <button
                 type="button"
@@ -674,8 +674,8 @@ function TreeNodeRow({
                 title="Click to preview · Ctrl+click to open in new tab"
               >
                 {loadingPreviewId === doc.id
-                  ? <Loader2 className="size-3 shrink-0 animate-spin" />
-                  : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
+                  ? <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                  : <Eye className="size-3.5 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
                 <span className="truncate">{doc.filename}</span>
               </button>
             ) : (
@@ -737,8 +737,8 @@ function TreeNodeRow({
                   title="Delete file"
                 >
                   {deletingId === doc.id
-                    ? <Loader2 className="size-3.5 animate-spin" />
-                    : <Trash2 className="size-3.5" />}
+                    ? <Loader2 className="size-4 animate-spin" />
+                    : <Trash2 className="size-4" />}
                 </button>
               )}
             </div>
@@ -952,7 +952,7 @@ function FileStructurePanel({
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmFolderDelete(null)} disabled={deletingFolder}>Cancel</Button>
             <Button variant="destructive" onClick={handleFolderDeleteConfirmed} disabled={deletingFolder}>
-              {deletingFolder ? <><Loader2 className="size-3.5 animate-spin mr-1" />Deleting…</> : "Delete folder"}
+              {deletingFolder ? <><Loader2 className="size-4 animate-spin mr-1" />Deleting…</> : "Delete folder"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -979,7 +979,7 @@ function FileStructurePanel({
             <div className="flex items-center justify-between gap-2 pr-8">
               <DialogTitle className="truncate text-sm">{previewDoc?.title}</DialogTitle>
               <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                <ExternalLink className="size-3.5" />Open in new tab
+                <ExternalLink className="size-4" />Open in new tab
               </a>
             </div>
           </DialogHeader>
@@ -1014,14 +1014,14 @@ function FileStructurePanel({
             onDragStart={(e) => { e.dataTransfer.setData("text/plain", doc.id); e.dataTransfer.effectAllowed = "move" }}
             className="group/filerow flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:bg-muted/30 cursor-default active:opacity-50"
           >
-            <GripVertical className="size-3.5 shrink-0 text-muted-foreground/20 opacity-0 group-hover/filerow:opacity-100 cursor-grab active:cursor-grabbing transition-opacity" />
+            <GripVertical className="size-4 shrink-0 text-muted-foreground/20 opacity-0 group-hover/filerow:opacity-100 cursor-grab active:cursor-grabbing transition-opacity" />
             {movingId === doc.id
-              ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+              ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
               : showStatus && doc.processing_status === "processing"
-                ? <Loader2 className="size-3 shrink-0 animate-spin text-primary" />
+                ? <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
                 : showStatus && (doc.classification_confidence > 0 || doc.processing_status === "completed")
-                  ? <CheckCircle2 className="size-3 shrink-0 text-green-600" />
-                  : <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />}
+                  ? <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                  : <FileIcon className="size-3.5 shrink-0 text-muted-foreground/40" />}
             {canPreview ? (
               <button
                 type="button"
@@ -1030,7 +1030,7 @@ function FileStructurePanel({
                 className="group min-w-0 flex-1 flex items-center gap-1 text-left hover:text-foreground transition-colors disabled:opacity-50"
                 title="Click to preview · Ctrl+click to open in new tab"
               >
-                {loadingPreviewId === doc.id ? <Loader2 className="size-3 shrink-0 animate-spin" /> : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
+                {loadingPreviewId === doc.id ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <Eye className="size-3.5 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />}
                 <span className="truncate">{doc.filename}</span>
               </button>
             ) : (
@@ -1092,8 +1092,8 @@ function FileStructurePanel({
                   title="Delete file"
                 >
                   {deletingId === doc.id
-                    ? <Loader2 className="size-3.5 animate-spin" />
-                    : <Trash2 className="size-3.5" />}
+                    ? <Loader2 className="size-4 animate-spin" />
+                    : <Trash2 className="size-4" />}
                 </button>
               )}
             </div>
@@ -1214,7 +1214,7 @@ function DuplicationPanel({
                 rel="noopener noreferrer"
                 className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               >
-                <ExternalLink className="size-3.5" />
+                <ExternalLink className="size-4" />
                 Open in new tab
               </a>
             </div>
@@ -1233,7 +1233,7 @@ function DuplicationPanel({
           <div key={group.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
             {/* Group header */}
             <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
-              <Files className="size-3.5 shrink-0 text-muted-foreground" />
+              <Files className="size-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs font-medium" title={group.group_name}>
                 {group.group_name}
               </span>
@@ -1272,8 +1272,8 @@ function DuplicationPanel({
                     {/* Col 1: icon */}
                     <div className="flex items-center justify-center">
                       {m.is_canonical
-                        ? <Shield className="size-3.5 shrink-0 text-green-500" />
-                        : <Files className="size-3.5 shrink-0 text-muted-foreground/40" />
+                        ? <Shield className="size-4 shrink-0 text-green-500" />
+                        : <Files className="size-4 shrink-0 text-muted-foreground/40" />
                       }
                     </div>
 
@@ -1286,8 +1286,8 @@ function DuplicationPanel({
                       title={m.original_path ?? m.filename ?? ""}
                     >
                       {loadingPreview === m.document_id
-                        ? <Loader2 className="size-3 shrink-0 animate-spin" />
-                        : <Eye className="size-3 shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" />}
+                        ? <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                        : <Eye className="size-3.5 shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" />}
                       <span className="min-w-0 flex flex-col leading-tight">
                         {(() => {
                           const fullPath = (m.original_path ?? m.filename ?? "Unknown").replace(/\\/g, "/")
@@ -1347,8 +1347,8 @@ function DuplicationPanel({
                           title="Delete this duplicate"
                         >
                           {deleting === m.document_id
-                            ? <Loader2 className="size-3.5 animate-spin" />
-                            : <><Trash2 className="size-3" /> Delete</>}
+                            ? <Loader2 className="size-4 animate-spin" />
+                            : <><Trash2 className="size-3.5" /> Delete</>}
                         </button>
                       )}
                     </div>
@@ -1527,7 +1527,7 @@ function ClassificationPanel({
               onClick={handleProcess}
               disabled={processing || isProcessingActive || documents.length === 0 || classifications.length === 0}
             >
-              {processing || isDocProcessing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+              {processing || isDocProcessing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               {processing ? "Starting…" : isDocProcessing ? "Processing…" : "Process"}
               {!processing && !isDocProcessing && hasUnprocessed && (
                 <span className="ml-0.5 inline-flex items-center gap-1 font-semibold">
@@ -1554,7 +1554,7 @@ function ClassificationPanel({
               <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5">
-                    <Loader2 className="size-3 animate-spin text-primary" />
+                    <Loader2 className="size-3.5 animate-spin text-primary" />
                     <span className="text-[11px] font-medium text-primary">
                       AI Processing{processingCount > 0 ? ` — ${processingCount} file${processingCount !== 1 ? "s" : ""} in progress` : "…"}
                     </span>
@@ -1717,7 +1717,7 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
         {chains.map((chain) => (
           <div key={chain.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
             <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
-              <Link2 className="size-3.5 shrink-0 text-muted-foreground" />
+              <Link2 className="size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium">{chain.tenant_name}</p>
                 {chain.tenant_identifier && (
@@ -1731,7 +1731,7 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
             <div className="divide-y divide-border/30">
               {chain.documents.map((doc) => (
                 <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5">
-                  <ChevronRight className="size-3 shrink-0 text-muted-foreground/40" />
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/40" />
                   <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={doc.original_path ?? ""}>
                     {doc.filename ?? doc.original_path ?? "Unknown"}
                   </span>
@@ -1740,7 +1740,7 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
                     {doc.amendment_number != null ? ` #${doc.amendment_number}` : ""}
                   </span>
                   {doc.is_orphaned && (
-                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" title="Orphaned" />
+                    <AlertTriangle className="size-4 shrink-0 text-amber-500" title="Orphaned" />
                   )}
                 </div>
               ))}
@@ -2050,7 +2050,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
             <div className="flex items-center justify-between gap-2 pr-8">
               <DialogTitle className="truncate text-sm">{uploadPreview?.title}</DialogTitle>
               <a href={uploadPreview?.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                <ExternalLink className="size-3.5" />Open in new tab
+                <ExternalLink className="size-4" />Open in new tab
               </a>
             </div>
           </DialogHeader>
@@ -2239,7 +2239,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     {skippedFiles.length > 0 && (
                       <div className="rounded-xl border border-red-200/80 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/20 overflow-hidden">
                         <div className="flex items-center gap-2 border-b border-red-200/60 dark:border-red-800/40 px-4 py-2.5">
-                          <AlertTriangle className="size-3.5 shrink-0 text-red-400" />
+                          <AlertTriangle className="size-4 shrink-0 text-red-400" />
                           <span className="min-w-0 flex-1 text-xs font-semibold text-red-600 dark:text-red-400">
                             {skippedFiles.length} skipped
                           </span>
@@ -2248,7 +2248,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                             onClick={() => setSkippedFiles([])}
                             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-red-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/40 transition-colors"
                           >
-                            <X className="size-3" />
+                            <X className="size-3.5" />
                             Clear
                           </button>
                         </div>
@@ -2262,7 +2262,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                             {skippedFiles.map((path) => (
                               <div key={path} className="grid grid-cols-[1fr_160px] items-center gap-2 px-4 py-1.5 text-xs">
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <X className="size-3.5 shrink-0 text-red-300 dark:text-red-600" />
+                                  <X className="size-4 shrink-0 text-red-300 dark:text-red-600" />
                                   <span className="min-w-0 flex-1 truncate text-red-400 line-through decoration-red-300/60" title={path}>
                                     {path}
                                   </span>
@@ -2318,7 +2318,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                               className="h-8 gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white border-0"
                               onClick={resetUpload}
                             >
-                              <Plus className="size-3.5" />
+                              <Plus className="size-4" />
                               Upload More
                             </Button>
                           </div>
@@ -2327,7 +2327,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                             <div className="px-4 py-2.5 border-b border-border/40 bg-primary/5">
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-1.5">
-                                  <Loader2 className="size-3 animate-spin text-primary" />
+                                  <Loader2 className="size-3.5 animate-spin text-primary" />
                                   <span className="text-[11px] font-medium text-primary">
                                     AI Processing{processingCount > 0 ? ` — ${processingCount} file${processingCount !== 1 ? "s" : ""} in progress` : "…"}
                                   </span>
@@ -2376,7 +2376,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                       onClick={() => setShowDropzone(false)}
                       className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
                     >
-                      <ChevronLeft className="size-3.5" />
+                      <ChevronLeft className="size-4" />
                       Back to files
                     </button>
                   </div>
@@ -2423,7 +2423,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                         className="h-8 gap-1.5 text-xs"
                         onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
                       >
-                        <FolderUp className="size-3.5" />
+                        <FolderUp className="size-4" />
                         Browse folder
                       </Button>
                       <Button
@@ -2432,7 +2432,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                         className="h-8 gap-1.5 text-xs"
                         onClick={(e) => { e.stopPropagation(); fileInputSingleRef.current?.click() }}
                       >
-                        <FileIcon className="size-3.5" />
+                        <FileIcon className="size-4" />
                         Browse files
                       </Button>
                     </div>
@@ -2481,24 +2481,24 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                               className="h-8 gap-1.5 text-xs"
                               onClick={() => fileInputRef.current?.click()}
                             >
-                              <RotateCcw className="size-3.5" />
+                              <RotateCcw className="size-4" />
                               Re-select
                             </Button>
                             <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={startUpload} disabled={!dealId}>
-                              <FolderUp className="size-3.5" />
+                              <FolderUp className="size-4" />
                               Upload
                             </Button>
                           </>
                         )}
                         {isUploading && (
                           <Button size="sm" variant="destructive" className="h-8 gap-1.5 text-xs" onClick={cancelUpload}>
-                            <X className="size-3.5" />
+                            <X className="size-4" />
                             Cancel
                           </Button>
                         )}
                         {uploadProgress.state === "done" && (
                           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={resetUpload}>
-                            <CheckCircle2 className="size-3.5 text-green-600" />
+                            <CheckCircle2 className="size-4 text-green-600" />
                             Done — upload more
                           </Button>
                         )}
@@ -2508,7 +2508,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                               Reset
                             </Button>
                             <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={startUpload}>
-                              <RotateCcw className="size-3.5" />
+                              <RotateCcw className="size-4" />
                               Retry
                             </Button>
                           </>
@@ -2521,7 +2521,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                         <div className="rounded-xl border border-orange-200 bg-orange-50/50 dark:border-orange-900/40 dark:bg-orange-950/20 overflow-hidden">
                           <div className="flex items-center justify-between gap-2 border-b border-orange-200/60 dark:border-orange-800/40 px-4 py-2.5">
                             <div className="flex items-center gap-2">
-                              <AlertTriangle className="size-3.5 shrink-0 text-orange-500" />
+                              <AlertTriangle className="size-4 shrink-0 text-orange-500" />
                               <span className="text-xs font-semibold text-orange-700 dark:text-orange-400">
                                 {conflictFiles.length} file{conflictFiles.length !== 1 ? "s" : ""} already exist
                               </span>
@@ -2557,7 +2557,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                               return (
                                 <div key={f.relativePath} className="grid grid-cols-[1fr_80px_80px_90px_90px] items-center gap-2 px-4 py-1.5 text-xs">
                                   <div className="flex min-w-0 items-center gap-2">
-                                    <FileIcon className="size-3.5 shrink-0 text-orange-400" />
+                                    <FileIcon className="size-4 shrink-0 text-orange-400" />
                                     <span className="min-w-0 truncate text-orange-700 dark:text-orange-300" title={f.relativePath}>
                                       {f.relativePath}
                                     </span>
@@ -2615,7 +2615,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                                   : `Uploading… ${Math.round(uploadProgress.overall * 100)}%`}
                           </span>
                           {isUploading && (
-                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
                           )}
                         </div>
                         <Progress value={uploadProgress.overall * 100} className="h-1.5" />
@@ -2690,13 +2690,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                               >
                                 <div className="flex items-center gap-2 min-w-0">
                                   {!supported ? (
-                                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+                                    <AlertTriangle className="size-4 shrink-0 text-amber-500" />
                                   ) : isDone ? (
-                                    <CheckCircle2 className="size-3.5 shrink-0 text-green-600" />
+                                    <CheckCircle2 className="size-4 shrink-0 text-green-600" />
                                   ) : isConflict ? (
-                                    <AlertTriangle className="size-3.5 shrink-0 text-orange-400" />
+                                    <AlertTriangle className="size-4 shrink-0 text-orange-400" />
                                   ) : (
-                                    <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                                    <FileIcon className="size-4 shrink-0 text-muted-foreground" />
                                   )}
                                   <span
                                     className={`min-w-0 flex-1 truncate ${!supported ? "text-amber-600 line-through decoration-amber-400/60" : willSkip ? "text-muted-foreground/50 line-through" : "text-muted-foreground"}`}
@@ -2719,7 +2719,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     {/* Skipped-files banner — shown after upload completes */}
                     {skippedFiles.length > 0 && uploadProgress.state === "done" && (
                       <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-900/40 dark:bg-amber-950/30">
-                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
                         <p className="text-xs text-amber-700 dark:text-amber-400">
                           {skippedFiles.length} file{skippedFiles.length !== 1 ? "s were" : " was"} skipped — unsupported file type.
                         </p>
@@ -2753,7 +2753,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     duplicates={dealData.duplicates}
                     loading={classificationsLoading}
                     dealId={dealId}
-                    onProcessed={dealData.refresh}
+                    onProcessed={dealData.silentRefresh}
                     isDocProcessing={
                       processingJob.status === "running" &&
                       processingJob.currentStage === "document_processing"
@@ -2822,7 +2822,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                     onClick={() => setSection(dest)}
                   >
                     Next: {nextLabel}
-                    <NextIcon className="size-3.5" />
+                    <NextIcon className="size-4" />
                   </Button>
                 </div>
               )
