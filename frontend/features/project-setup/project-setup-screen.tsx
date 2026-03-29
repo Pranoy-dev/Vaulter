@@ -1598,6 +1598,14 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
     if (fileInputSingleRef.current) fileInputSingleRef.current.value = ""
   }
 
+  // Reset dropzone state when switching projects
+  React.useEffect(() => {
+    setShowDropzone(true)
+    setSelectedFiles([])
+    setOverwriteSet(new Set())
+    setUploadProgress({ overall: 0, files: {}, state: "idle" })
+  }, [dealId])
+
   // Hide dropzone if this project already has files (loaded from sidebar)
   React.useEffect(() => {
     if (dealData.documents.length > 0) setShowDropzone(false)
