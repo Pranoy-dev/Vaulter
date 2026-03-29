@@ -47,14 +47,41 @@ return ApiResponse.fail("NOT_FOUND", "Deal not found")
 
 ## Running the Backend
 
-Always start with `--reload-dir` scoped to `app/` only — without it, uvicorn watches the entire workspace root and triggers spurious reloads on any file change.
+### Critical: use `combined_app`, not `app`
+
+The FastAPI `app` is wrapped in `socketio.ASGIApp` as `combined_app` (bottom of `main.py`).
+You **must** point uvicorn at `app.main:combined_app` — using `app.main:app` causes all Socket.IO
+`/socket.io/` requests to return 404.
+
+### Critical: Windows cwd issue
+
+On Windows the integrated terminal tool resets `cwd` to the workspace root even after `Set-Location` / `Push-Location`. The only reliable fix is to launch a **separate PowerShell process** with the correct working directory:
 
 ```powershell
-# Clean restart (kills all python processes first to avoid stale reloader parents)
-Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep -Seconds 2
-Set-Location d:\Project\Vaulter\backend
-python -m uvicorn app.main:app --reload --reload-dir d:\Project\Vaulter\backend\app --port 8000
+# Start API (run from anywhere — cwd is forced inside the new process)
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location 'd:\Project\DataRoomAI\backend'; uvicorn app.main:combined_app --reload --host 0.0.0.0 --port 8000"
 ```
 
-**Why kill all python processes?** `uvicorn --reload` spawns a reloader parent + a worker child. `Get-NetTCPConnection` only sees the worker (socket owner). Killing just the worker causes the reloader to immediately spawn a new one. You must kill the full process tree — easiest with `Get-Process python | Stop-Process -Force`.
+### Full clean-restart sequence
+
+```powershell
+# 1. Kill everything
+Get-Process -Name "node","python","uvicorn" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+# 2. Start API
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location 'd:\Project\DataRoomAI\backend'; uvicorn app.main:combined_app --reload --host 0.0.0.0 --port 8000"
+
+# 3. Start UI
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location 'd:\Project\DataRoomAI\frontend'; pnpm dev"
+
+# 4. Verify (after a few seconds)
+Invoke-WebRequest http://localhost:8000/api/health -UseBasicParsing | Select-Object StatusCode
+Invoke-WebRequest http://localhost:3000 -UseBasicParsing | Select-Object StatusCode
+```
+
+**Why `combined_app`?** `uvicorn --reload` spawns a reloader parent + worker child. The worker
+imports the module and serves requests. If you point it at the bare `app`, the `socketio.ASGIApp`
+wrapper that mounts `/socket.io/` is never activated.
+
+**Why kill all processes?** `uvicorn --reload` spawns a reloader parent + a worker child.
+Killing just the worker causes the reloader to immediately spawn a new one. Kill the full tree with `Stop-Process`.
