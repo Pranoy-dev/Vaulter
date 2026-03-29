@@ -386,11 +386,17 @@ function TreeNodeRow({
                     )}
                   </div>
                   <div className="w-24 flex justify-end">
-                    <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
-                      {doc.rag_indexed
-                        ? <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
-                        : <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
-                    </HoverTooltip>
+                    {doc.is_empty ? (
+                      <HoverTooltip content="This file is empty — no content to index for AI search.">
+                        <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Skipped</span>
+                      </HoverTooltip>
+                    ) : (
+                      <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
+                        {doc.rag_indexed
+                          ? <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
+                          : <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
+                      </HoverTooltip>
+                    )}
                   </div>
                 </>
               )}
@@ -735,11 +741,17 @@ function FileStructurePanel({
                     )}
                   </div>
                   <div className="w-24 flex justify-end">
-                    <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
-                      {doc.rag_indexed
-                        ? <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
-                        : <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
-                    </HoverTooltip>
+                    {doc.is_empty ? (
+                      <HoverTooltip content="This file is empty — no content to index for AI search.">
+                        <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Skipped</span>
+                      </HoverTooltip>
+                    ) : (
+                      <HoverTooltip content={doc.rag_indexed ? `Indexed for AI search${doc.rag_indexed_at ? ` on ${new Date(doc.rag_indexed_at).toLocaleDateString()}` : ""}.` : "Not yet indexed for AI search (RAG). This file won't be searchable by the AI assistant until indexed."}>
+                        {doc.rag_indexed
+                          ? <span className="whitespace-nowrap rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-950/50 dark:text-green-400 cursor-default">RAG Done</span>
+                          : <span className="whitespace-nowrap rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">RAG Pending</span>}
+                      </HoverTooltip>
+                    )}
                   </div>
                 </>
               )}
@@ -1040,11 +1052,15 @@ function ClassificationPanel({
       />
     )
 
-  // Only count documents that have actually been classified (confidence > 0)
-  // Docs that are empty or incomplete are treated as unclassified regardless of confidence
+  // Docs that have actually been classified (confidence > 0, not empty, not incomplete)
   const classifiedDocs = documents.filter((d) => d.classification_confidence > 0 && !d.is_empty && !d.is_incomplete)
   const unclassifiedDocs = documents.filter((d) => d.classification_confidence <= 0 || d.is_empty || d.is_incomplete)
-  const unclassifiedCount = unclassifiedDocs.length
+
+  // Only count docs that haven't been through Gemini yet as needing classification.
+  // Incomplete / low-confidence docs that are already "completed" should NOT trigger reclassification.
+  const unclassifiedCount = documents.filter(
+    (d) => !d.processing_status || d.processing_status === "pending"
+  ).length
 
   const countByKey = classifiedDocs.reduce<Record<string, number>>((acc, d) => {
     acc[d.assigned_category] = (acc[d.assigned_category] ?? 0) + 1
@@ -1052,7 +1068,11 @@ function ClassificationPanel({
   }, {})
 
   const active = classifications.filter((c) => c.is_active)
-  const hasUnprocessed = documents.length > 0 && unclassifiedCount > 0
+  // Empty files are skipped for RAG — don't count them as needing indexing
+  const notRagIndexedCount = documents.filter(
+    (d) => !d.rag_indexed && !d.is_empty && d.processing_status === "completed"
+  ).length
+  const hasUnprocessed = documents.length > 0 && (unclassifiedCount > 0 || notRagIndexedCount > 0)
 
   // Filtered docs for the tree
   const filteredDocs = selectedFilter === null
@@ -1109,6 +1129,20 @@ function ClassificationPanel({
             >
               {processing || isDocProcessing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
               {processing ? "Starting…" : isDocProcessing ? "Processing…" : "Process"}
+              {!processing && !isDocProcessing && hasUnprocessed && (
+                <span className="ml-0.5 inline-flex items-center gap-1 font-semibold">
+                  {unclassifiedCount > 0 && (
+                    <span className="rounded bg-white/25 px-2 py-0.5 text-[10px] leading-none tabular-nums">
+                      {unclassifiedCount} classify
+                    </span>
+                  )}
+                  {notRagIndexedCount > 0 && (
+                    <span className="rounded bg-white/25 px-2 py-0.5 text-[10px] leading-none tabular-nums">
+                      {notRagIndexedCount} RAG
+                    </span>
+                  )}
+                </span>
+              )}
             </Button>
           </div>
           {/* Per-file processing progress bar */}
@@ -2315,6 +2349,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               <div className="min-h-0 flex-1">
                 <ProjectSetupAssistant
                   chatPrepend={isDemoWorkspace ? <DemoAgentProcessingLog /> : undefined}
+                  dealId={dealId}
                 />
               </div>
             </CardContent>

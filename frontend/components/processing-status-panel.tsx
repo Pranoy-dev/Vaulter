@@ -45,37 +45,22 @@ function StageRow({
   description,
   status,
   subStage,
-  stageDetail,
   currentFile,
+  aiDetail,
+  ragDetail,
 }: {
   label: string
   description: string
   status: "idle" | "pending" | "running" | "completed" | "failed"
   subStage?: string | null
-  stageDetail?: string | null
   currentFile?: string | null
+  aiDetail?: { current: number; total: number } | null
+  ragDetail?: { current: number; total: number } | null
 }) {
-  const subLabel =
-    status === "running" && subStage
-      ? subStage === "ai_processing"
-        ? "AI Processing"
-        : subStage === "rag_processing"
-          ? "RAG Processing"
-          : null
-      : null
+  const isDocRunning = status === "running" && (aiDetail || ragDetail)
 
-  // Parse "3/10" → { current, total, pct }
-  const counts =
-    status === "running" && stageDetail
-      ? (() => {
-          const m = stageDetail.match(/^(\d+)\/(\d+)/)
-          if (!m) return null
-          const current = parseInt(m[1], 10)
-          const total = parseInt(m[2], 10)
-          const pct = total > 0 ? Math.round((current / total) * 100) : 0
-          return { current, total, pct }
-        })()
-      : null
+  const aiPct = aiDetail && aiDetail.total > 0 ? Math.round((aiDetail.current / aiDetail.total) * 100) : 0
+  const ragPct = ragDetail && ragDetail.total > 0 ? Math.round((ragDetail.current / ragDetail.total) * 100) : 0
 
   return (
     <div className="flex items-start gap-3 rounded-lg px-3 py-2.5">
@@ -117,34 +102,43 @@ function StageRow({
         </div>
         <p className="text-[11px] text-muted-foreground/70">{description}</p>
 
-        {/* Sub-stage details with progress */}
-        {subLabel && (
-          <div className="mt-1.5 space-y-1.5">
-            {/* Total progress bar */}
-            {counts && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground">
-                    Total: {counts.current} of {counts.total} documents
-                  </span>
-                  <span className="text-[10px] font-semibold text-primary">{counts.pct}%</span>
-                </div>
-                <Progress value={counts.pct} className="h-1" />
-              </div>
-            )}
-
-            {/* Current document being processed */}
-            <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                <Loader2 className="size-2.5 animate-spin" />
-                {subLabel}
-              </span>
-              {currentFile && (
-                <span className="truncate text-[10px] text-muted-foreground" title={currentFile}>
-                  {currentFile}
+        {/* Sub-stage details — separate AI and RAG progress */}
+        {isDocRunning && (
+          <div className="mt-2 space-y-2">
+            {/* AI Classification row */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary">
+                  {subStage === "ai_processing" && <Loader2 className="size-2.5 animate-spin" />}
+                  AI Classification
                 </span>
-              )}
+                <span className="text-[10px] font-semibold tabular-nums text-primary">
+                  {aiDetail ? `${aiDetail.current}/${aiDetail.total}` : "—"} ({aiPct}%)
+                </span>
+              </div>
+              <Progress value={aiPct} className="h-1" />
             </div>
+
+            {/* RAG Embedding row */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 dark:text-violet-400">
+                  {subStage === "rag_processing" && <Loader2 className="size-2.5 animate-spin text-violet-600 dark:text-violet-400" />}
+                  RAG Embedding
+                </span>
+                <span className="text-[10px] font-semibold tabular-nums text-violet-600 dark:text-violet-400">
+                  {ragDetail ? `${ragDetail.current}/${ragDetail.total}` : "—"} ({ragPct}%)
+                </span>
+              </div>
+              <Progress value={ragPct} className="h-1 [&_[data-slot=progress-indicator]]:bg-violet-500" />
+            </div>
+
+            {/* Current file */}
+            {currentFile && (
+              <p className="truncate text-[10px] text-muted-foreground" title={currentFile}>
+                ↳ {currentFile}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -222,8 +216,9 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
               description={stage.description}
               status={status}
               subStage={isDocProcessing && status === "running" ? job.subStage : null}
-              stageDetail={isDocProcessing && status === "running" ? job.stageDetail : null}
               currentFile={isDocProcessing && status === "running" ? job.currentFile : null}
+              aiDetail={isDocProcessing && status === "running" ? job.aiDetail : null}
+              ragDetail={isDocProcessing && status === "running" ? job.ragDetail : null}
             />
           )
         })}

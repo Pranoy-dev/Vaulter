@@ -26,7 +26,8 @@ async def _update_job(deal_id: str, *, status: str | None = None, stage: str | N
                 progress: float | None = None, error: str | None = None,
                 started: bool = False, completed: bool = False,
                 sub_stage: str | None = None, stage_detail: str | None = None,
-                current_file: str | None = None):
+                current_file: str | None = None,
+                ai_detail: str | None = None, rag_detail: str | None = None):
     """Update the processing_jobs row and push via Socket.IO."""
     sb = get_supabase()
     update: dict = {}
@@ -54,6 +55,8 @@ async def _update_job(deal_id: str, *, status: str | None = None, stage: str | N
         "sub_stage": sub_stage,
         "stage_detail": stage_detail,
         "current_file": current_file,
+        "ai_detail": ai_detail,
+        "rag_detail": rag_detail,
     })
 
 
@@ -76,22 +79,32 @@ async def _run_pipeline(deal_id: str):
 
         loop = asyncio.get_running_loop()
 
-        def _progress_cb(sub_stage: str, current: int, total: int, filename: str = "") -> None:
+        def _progress_cb(payload: dict) -> None:
             """Sync callback invoked from the processing thread."""
-            # Map sub-stage progress into the 0.12 – 0.50 range
-            if total > 0:
-                frac = current / total
-            else:
-                frac = 0.0
-            overall = 0.12 + frac * 0.38  # 0.12 → 0.50
-            detail = f"{current}/{total}"
+            sub_stage = payload.get("sub_stage", "")
+            ai_current = payload.get("ai_current", 0)
+            ai_total = payload.get("ai_total", 1)
+            rag_current = payload.get("rag_current", 0)
+            rag_total = payload.get("rag_total", 1)
+            filename = payload.get("filename", "")
+
+            # Map combined AI+RAG progress into the 0.12 – 0.50 range
+            ai_frac = ai_current / ai_total if ai_total > 0 else 0.0
+            rag_frac = rag_current / rag_total if rag_total > 0 else 0.0
+            overall = 0.12 + (ai_frac * 0.6 + rag_frac * 0.4) * 0.38  # 0.12 → 0.50
+
+            ai_detail = f"{ai_current}/{ai_total}"
+            rag_detail = f"{rag_current}/{rag_total}"
+
             asyncio.run_coroutine_threadsafe(
                 _update_job(
                     deal_id,
                     progress=round(overall, 3),
                     sub_stage=sub_stage,
-                    stage_detail=detail,
+                    stage_detail=ai_detail,   # kept for backward compat
                     current_file=filename,
+                    ai_detail=ai_detail,
+                    rag_detail=rag_detail,
                 ),
                 loop,
             )

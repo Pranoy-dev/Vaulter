@@ -3,11 +3,33 @@
 import { Thread } from "@/components/assistant-ui/thread"
 import { AssistantRuntimeProvider } from "@assistant-ui/react"
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk"
+import { useAuth } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
+import * as React from "react"
 import type { ReactNode } from "react"
 
-export function ProjectSetupAssistant({ chatPrepend }: { chatPrepend?: ReactNode }) {
-  const runtime = useChatRuntime()
+export function ProjectSetupAssistant({
+  chatPrepend,
+  dealId,
+}: {
+  chatPrepend?: ReactNode
+  dealId?: string | null
+}) {
+  const { getToken } = useAuth()
+  const [authToken, setAuthToken] = React.useState<string | null>(null)
+
+  // Refresh token once on mount (token is short-lived but valid long enough for a session)
+  React.useEffect(() => {
+    getToken().then((t) => setAuthToken(t ?? null))
+  }, [getToken])
+
+  const runtime = useChatRuntime({
+    api: "/api/chat",
+    body: {
+      ...(dealId ? { dealId } : {}),
+      ...(authToken ? { authToken } : {}),
+    },
+  })
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

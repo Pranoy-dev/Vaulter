@@ -35,6 +35,10 @@ GEMINI_MODEL = "gemini-2.5-flash"
 # Free tier (10 RPM): keep at 2-3. Tier 1+ (2000 RPM): 5-10 is fine.
 PROCESSING_CONCURRENCY = 5
 
+# RAG embedding workers (OpenAI text-embedding-3-small).
+# 5 is safe for both free tier and Tier 1 rate limits.
+RAG_CONCURRENCY = 5
+
 
 def _get_client() -> genai.Client:
     global _client
@@ -885,25 +889,33 @@ def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OV
 
 
 def process_deal_documents(deal_id: str, progress_callback=None) -> int:
-    """Process all documents in a deal through Gemini.
+    """Process all documents in a deal: Gemini classification + OpenAI RAG embeddings.
 
-    Documents are processed in parallel (up to PROCESSING_CONCURRENCY at once).
-    Each worker uses its own Supabase client to avoid shared-connection issues.
+    Pipeline architecture — classification and RAG run in parallel:
+    - Classify pool (PROCESSING_CONCURRENCY workers): calls Gemini, writes result to DB.
+    - RAG pool (RAG_CONCURRENCY workers): embeds chunks via OpenAI.  Each doc is submitted
+      to this pool as soon as it finishes classification, so RAG runs concurrently with
+      ongoing classification work (true pipeline parallelism).
+
+    RAG only runs on docs that finish classification with extractable text.
+    Already-classified docs that are not yet RAG-indexed are also queued for embedding.
 
     Args:
         deal_id: The deal ID.
-        progress_callback: Optional ``(sub_stage, current, total) -> None`` called
-            to report per-document progress.  *sub_stage* is one of
-            ``"ai_processing"`` or ``"rag_processing"``.
+        progress_callback: Optional callable receiving a dict:
+            {sub_stage, ai_current, ai_total, rag_current, rag_total, filename}
 
     Returns the number of documents successfully processed.
     """
     sb = get_supabase()
 
-    # Fetch documents
+    # Fetch all docs — include rag_indexed to detect partially-done docs
     docs = (
         sb.table("documents")
-        .select("id, filename, original_path, file_extension, file_size, storage_path, extracted_text, is_empty, processing_status")
+        .select(
+            "id, filename, original_path, file_extension, file_size, storage_path, "
+            "extracted_text, is_empty, processing_status, rag_indexed"
+        )
         .eq("deal_id", deal_id)
         .execute()
     ).data
@@ -924,38 +936,119 @@ def process_deal_documents(deal_id: str, progress_callback=None) -> int:
         )
         categories = cats.data or []
 
-    total_docs = len(docs)
+    # Bucket docs into three groups:
+    # needs_classify  — processing_status is not "completed"/"failed" → full Gemini pipeline
+    # needs_rag_only  — already classified (completed) + has text + not RAG-indexed → go straight to RAG pool
+    # fully_done      — completed + RAG-indexed (or empty/failed) → nothing to do
+    needs_classify: list[dict] = []
+    needs_rag_only: list[dict] = []
+    fully_done: list[dict] = []
 
-    # Separate already-done docs from pending ones
-    already_done: list[dict] = []
-    pending_docs: list[dict] = []
     for doc in docs:
-        if doc.get("extracted_text") or doc.get("is_empty"):
-            already_done.append(doc)
-        else:
-            pending_docs.append(doc)
+        status = doc.get("processing_status") or "pending"
+        has_text = bool(doc.get("extracted_text"))
+        is_empty = bool(doc.get("is_empty"))
+        rag_done = bool(doc.get("rag_indexed"))
+        is_classified = status in ("completed", "failed")
 
-    # Mark already-done docs as completed if needed (main thread, fast)
-    for doc in already_done:
+        if is_empty:
+            fully_done.append(doc)          # empty files → skip RAG entirely
+        elif is_classified and rag_done:
+            fully_done.append(doc)          # already fully processed
+        elif is_classified and has_text and not rag_done:
+            needs_rag_only.append(doc)      # classified, has content, needs embedding
+        elif is_classified and not has_text:
+            fully_done.append(doc)          # classified but no extractable text → skip RAG
+        else:
+            needs_classify.append(doc)      # not yet through Gemini → full pipeline
+
+    # Mark already-fully-done docs as completed (main thread, no Gemini call)
+    for doc in fully_done:
         if doc.get("processing_status") != "completed":
             sb.table("documents").update({"processing_status": "completed"}).eq("id", doc["id"]).execute()
 
-    # Thread-safe progress counter
-    _lock = threading.Lock()
-    _completed = [len(already_done)]  # start count includes already-done
+    total_classify = len(needs_classify)
+    # RAG total = newly classified (eligible ones) + already-classified-but-not-yet-RAG'd
+    # We use total_classify as upper bound for newly-classified RAG; reduces as empties are found.
+    total_rag = total_classify + len(needs_rag_only)
 
-    def _process_one(doc: dict) -> int:
-        """Process a single document. Runs in a worker thread."""
+    if total_classify == 0 and not needs_rag_only:
+        return len(fully_done)
+
+    # ── Thread-safe progress counters ────────────────────────────────────────
+    _lock = threading.Lock()
+    _ai_done = [0]   # docs that finished Gemini classification
+    _rag_done = [0]  # docs that finished RAG embedding
+
+    def _emit(sub_stage: str, filename: str) -> None:
+        """Fire progress callback with current counters."""
+        if not progress_callback:
+            return
+        with _lock:
+            ai_cur = _ai_done[0]
+            rag_cur = _rag_done[0]
+        progress_callback({
+            "sub_stage": sub_stage,
+            "ai_current": ai_cur,
+            "ai_total": total_classify,
+            "rag_current": rag_cur,
+            "rag_total": total_rag,
+            "filename": filename,
+        })
+
+    # ── Helper: write semantic/naive chunks to DB ─────────────────────────────
+    def _write_chunks(tsb, doc: dict, doc_id: str, result: ProcessingResult) -> None:
+        if result.chunks:
+            chunk_rows = [
+                {
+                    "document_id": doc_id,
+                    "deal_id": deal_id,
+                    "chunk_index": idx,
+                    "content": c["content"],
+                    "token_count": max(1, len(c["content"]) // 4),
+                    "metadata": {
+                        "filename": doc.get("filename"),
+                        "category": result.category_key,
+                        "title": c.get("title", ""),
+                        "topic": c.get("topic", ""),
+                    },
+                }
+                for idx, c in enumerate(result.chunks)
+            ]
+        else:
+            naive = _chunk_text(result.extracted_text)
+            chunk_rows = [
+                {
+                    "document_id": doc_id,
+                    "deal_id": deal_id,
+                    "chunk_index": c["chunk_index"],
+                    "content": c["content"],
+                    "token_count": c["token_count"],
+                    "metadata": {
+                        "filename": doc.get("filename"),
+                        "category": result.category_key,
+                    },
+                }
+                for c in naive
+            ]
+
+        if chunk_rows:
+            tsb.table("document_chunks").delete().eq("document_id", doc_id).execute()
+            tsb.table("document_chunks").insert(chunk_rows).execute()
+            logger.info(
+                "Created %d chunks for document %s (semantic=%s)",
+                len(chunk_rows), doc_id, bool(result.chunks),
+            )
+
+    # ── Classify worker (runs in classify pool) ───────────────────────────────
+    def _classify_one(doc: dict) -> tuple[bool, str, str, int]:
+        """Run Gemini classification for one doc.  Returns (rag_eligible, doc_id, filename, success)."""
         tsb = _get_thread_supabase()
         doc_id = doc["id"]
         filename = doc.get("original_path") or doc.get("filename", "")
 
-        # Report start and mark as processing
-        with _lock:
-            current = _completed[0]
-            if progress_callback:
-                progress_callback("ai_processing", current, total_docs, filename)
         tsb.table("documents").update({"processing_status": "processing"}).eq("id", doc_id).execute()
+        _emit("ai_processing", filename)
 
         result = process_document(doc, categories)
 
@@ -966,11 +1059,13 @@ def process_deal_documents(deal_id: str, progress_callback=None) -> int:
                 "processing_error": str(result.error),
             }).eq("id", doc_id).execute()
             with _lock:
-                _completed[0] += 1
-            return 0
+                _ai_done[0] += 1
+                _rag_done[0] += 1  # stall-prevention: count error docs as RAG-done
+            _emit("ai_processing", filename)
+            return False, doc_id, filename, 0
 
-        # Write classification result
-        update_data: dict = {
+        # Write classification to DB
+        tsb.table("documents").update({
             "extracted_text": result.extracted_text or None,
             "assigned_category": result.category_key,
             "classification_confidence": round(result.classification_confidence, 3),
@@ -986,73 +1081,81 @@ def process_deal_documents(deal_id: str, progress_callback=None) -> int:
             "key_terms": result.key_terms or None,
             "processing_status": "completed",
             "classified_at": datetime.now(timezone.utc).isoformat(),
-        }
-        tsb.table("documents").update(update_data).eq("id", doc_id).execute()
+        }).eq("id", doc_id).execute()
 
-        # Create text chunks for embedding / RAG
-        if result.extracted_text and result.extracted_text.strip():
-            with _lock:
-                current = _completed[0]
-                if progress_callback:
-                    progress_callback("rag_processing", current, total_docs, filename)
+        rag_eligible = bool(result.extracted_text and result.extracted_text.strip() and not result.is_empty)
 
-            if result.chunks:
-                chunk_rows = [
-                    {
-                        "document_id": doc_id,
-                        "deal_id": deal_id,
-                        "chunk_index": idx,
-                        "content": c["content"],
-                        "token_count": max(1, len(c["content"]) // 4),
-                        "metadata": {
-                            "filename": doc.get("filename"),
-                            "category": result.category_key,
-                            "title": c.get("title", ""),
-                            "topic": c.get("topic", ""),
-                        },
-                    }
-                    for idx, c in enumerate(result.chunks)
-                ]
-            else:
-                naive = _chunk_text(result.extracted_text)
-                chunk_rows = [
-                    {
-                        "document_id": doc_id,
-                        "deal_id": deal_id,
-                        "chunk_index": c["chunk_index"],
-                        "content": c["content"],
-                        "token_count": c["token_count"],
-                        "metadata": {
-                            "filename": doc.get("filename"),
-                            "category": result.category_key,
-                        },
-                    }
-                    for c in naive
-                ]
+        # Write chunks immediately (fast DB insert, no API call — RAG pool can start right away)
+        if rag_eligible:
+            _write_chunks(tsb, doc, doc_id, result)
 
-            if chunk_rows:
-                tsb.table("document_chunks").delete().eq("document_id", doc_id).execute()
-                tsb.table("document_chunks").insert(chunk_rows).execute()
-                logger.info(
-                    "Created %d chunks for document %s (semantic=%s)",
-                    len(chunk_rows), doc_id, bool(result.chunks),
-                )
-
+        # AI counter done
         with _lock:
-            _completed[0] += 1
+            _ai_done[0] += 1
+        _emit("ai_processing", filename)
 
-        return 1
+        if not rag_eligible:
+            # Empty/un-extractable doc — mark RAG as done so bar doesn't stall
+            with _lock:
+                _rag_done[0] += 1
+            _emit("rag_processing", filename)
 
-    # Process pending docs in parallel
-    processed = len(already_done)
-    if pending_docs:
-        with ThreadPoolExecutor(max_workers=PROCESSING_CONCURRENCY) as executor:
-            futures = {executor.submit(_process_one, doc): doc for doc in pending_docs}
-            for future in as_completed(futures):
+        return rag_eligible, doc_id, filename, 1
+
+    # ── RAG worker (runs in rag pool) ─────────────────────────────────────────
+    def _rag_one(doc_id: str, filename: str) -> None:
+        """Embed chunks for a classified document via OpenAI.  Runs in the RAG pool."""
+        from app.services.embeddings import embed_document_chunks
+
+        tsb = _get_thread_supabase()
+        _emit("rag_processing", filename)
+        try:
+            n_embedded = embed_document_chunks(doc_id)
+            tsb.table("documents").update({
+                "rag_indexed": True,
+                "rag_indexed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", doc_id).execute()
+            logger.info("Embedded %d chunks for document %s", n_embedded, doc_id)
+        except Exception as emb_exc:
+            logger.warning("Embedding failed for document %s: %s", doc_id, emb_exc)
+        with _lock:
+            _rag_done[0] += 1
+        _emit("rag_processing", filename)
+
+    # ── Pipeline: classify + RAG pools run concurrently ───────────────────────
+    #
+    # As each doc finishes classification it is submitted to the RAG pool
+    # immediately, so embedding starts while other docs are still being
+    # classified.  The rag_pool context manager waits for all submitted tasks
+    # before exiting, so we never return until every RAG job is done.
+    processed = len(fully_done)
+
+    with (
+        ThreadPoolExecutor(max_workers=PROCESSING_CONCURRENCY) as classify_pool,
+        ThreadPoolExecutor(max_workers=RAG_CONCURRENCY) as rag_pool,
+    ):
+        if needs_classify:
+            classify_futures = {
+                classify_pool.submit(_classify_one, doc): doc for doc in needs_classify
+            }
+            for future in as_completed(classify_futures):
+                doc = classify_futures[future]
                 try:
-                    processed += future.result()
+                    rag_eligible, doc_id, filename, success = future.result()
+                    processed += success
+                    if rag_eligible:
+                        # Submit to RAG pool immediately — runs in parallel with
+                        # remaining classification work.
+                        rag_pool.submit(_rag_one, doc_id, filename)
                 except Exception as exc:
-                    doc = futures[future]
-                    logger.error("Unexpected error processing document %s: %s", doc["id"], exc)
+                    logger.error("Unexpected error classifying document %s: %s", doc["id"], exc)
+
+        # Already-classified docs that still need RAG — queue them directly
+        for doc in needs_rag_only:
+            filename = doc.get("original_path") or doc.get("filename", "")
+            rag_pool.submit(_rag_one, doc["id"], filename)
+            processed += 1  # classified in a previous run; count it
+
+        # rag_pool.__exit__ blocks until every submitted RAG task completes.
 
     return processed

@@ -27,6 +27,10 @@ export interface ProcessingJobState {
   stageDetail: string | null
   /** Filename of the document currently being processed */
   currentFile: string | null
+  /** AI classification progress: { current, total } */
+  aiDetail: { current: number; total: number } | null
+  /** RAG embedding progress: { current, total } */
+  ragDetail: { current: number; total: number } | null
   /** true while the first fetch is in-flight */
   loading: boolean
 }
@@ -64,6 +68,14 @@ export function stageStatus(
   return "pending"
 }
 
+/** Parse "3/10" → { current: 3, total: 10 } or null. */
+function _parseDetail(detail: string | null | undefined): { current: number; total: number } | null {
+  if (!detail) return null
+  const m = detail.match(/^(\d+)\/(\d+)$/)
+  if (!m) return null
+  return { current: parseInt(m[1], 10), total: parseInt(m[2], 10) }
+}
+
 export function useProcessingStatus(dealId: string | null): ProcessingJobState {
   const { getToken } = useAuth()
   const [state, setState] = React.useState<ProcessingJobState>({
@@ -74,6 +86,8 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
     subStage: null,
     stageDetail: null,
     currentFile: null,
+    aiDetail: null,
+    ragDetail: null,
     loading: false,
   })
   const socketRef = React.useRef<Socket | null>(null)
@@ -107,6 +121,8 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
         subStage: data.sub_stage ?? null,
         stageDetail: data.stage_detail ?? null,
         currentFile: data.current_file ?? null,
+        aiDetail: _parseDetail(data.ai_detail),
+        ragDetail: _parseDetail(data.rag_detail),
         loading: false,
       })
     } catch {
@@ -148,6 +164,8 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
       sub_stage?: string | null
       stage_detail?: string | null
       current_file?: string | null
+      ai_detail?: string | null
+      rag_detail?: string | null
     }) => {
       setState((prev) => ({
         status: (data.status ?? prev.status) as ProcessingStatus,
@@ -157,6 +175,8 @@ export function useProcessingStatus(dealId: string | null): ProcessingJobState {
         subStage: data.sub_stage !== undefined ? data.sub_stage : prev.subStage,
         stageDetail: data.stage_detail !== undefined ? data.stage_detail : prev.stageDetail,
         currentFile: data.current_file !== undefined ? data.current_file : prev.currentFile,
+        aiDetail: data.ai_detail !== undefined ? _parseDetail(data.ai_detail) : prev.aiDetail,
+        ragDetail: data.rag_detail !== undefined ? _parseDetail(data.rag_detail) : prev.ragDetail,
         loading: false,
       }))
     })
