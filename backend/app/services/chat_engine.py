@@ -271,7 +271,7 @@ def _fmt_size(bytes_: int | None) -> str:
     return f"{bytes_:.1f} GB"
 
 
-def _build_folder_tree(docs: list[dict]) -> str:
+def _build_folder_tree(docs: list[dict], cat_label_fn=None) -> str:
     """Render an ASCII folder tree from original_path values.
 
     Example output:
@@ -298,13 +298,17 @@ def _build_folder_tree(docs: list[dict]) -> str:
     if not folders:
         return ""
 
-    CAT_LABELS: dict[str, str] = {
-        "financial": "Financial",
-        "technical_environmental": "Technical / Environmental",
-        "leases_amendments": "Leases & Amendments",
-        "corporate_legal": "Corporate & Legal",
-        "other": "Other",
-    }
+    def _label(key: str) -> str:
+        if cat_label_fn:
+            return cat_label_fn(key)
+        fallback: dict[str, str] = {
+            "financial": "Financial",
+            "technical_environmental": "Technical / Environmental",
+            "leases_amendments": "Leases & Amendments",
+            "corporate_legal": "Corporate & Legal",
+            "other": "Other",
+        }
+        return fallback.get(key, key)
 
     lines = ["## Folder Structure"]
     for folder in sorted(folders):
@@ -312,7 +316,7 @@ def _build_folder_tree(docs: list[dict]) -> str:
         lines.append(f"\n{folder}/  ({len(folder_docs)} file{'s' if len(folder_docs) != 1 else ''})")
         for i, doc in enumerate(folder_docs):
             connector = "└──" if i == len(folder_docs) - 1 else "├──"
-            cat = CAT_LABELS.get(doc.get("assigned_category") or "other", doc.get("assigned_category") or "other")
+            cat = _label(doc.get("assigned_category") or "other")
             size_str = _fmt_size(doc.get("file_size"))
             status = doc.get("processing_status", "")
             status_tag = f" ⚠ {status}" if status not in ("completed", "") else ""
@@ -327,6 +331,7 @@ def _build_deal_overview(deal_id: str) -> str:
     """Build a structured document inventory from the full documents table.
 
     Includes:
+      - Company classification categories (authoritative list)
       - Deal-level summary (totals, category breakdown, completeness)
       - Per-document metadata: file type, size, classification confidence/reasoning,
         completeness flags, parties, key terms, expiry, signatures/seals, summary.
@@ -334,6 +339,36 @@ def _build_deal_overview(deal_id: str) -> str:
     data room (counts, failures, pending files, etc.).
     """
     sb = get_supabase()
+
+    # ── Resolve company classifications ──────────────────────────────────────
+    deal_row = (
+        sb.table("deals")
+        .select("company_id")
+        .eq("id", deal_id)
+        .limit(1)
+        .execute()
+    ).data
+    company_id = deal_row[0].get("company_id") if deal_row else None
+
+    cat_label_map: dict[str, str] = {}   # key → human label
+    cat_desc_map: dict[str, str] = {}    # key → description
+    if company_id:
+        clf_rows = (
+            sb.table("company_classifications")
+            .select("key, label, description")
+            .eq("company_id", company_id)
+            .eq("is_active", True)
+            .order("display_order")
+            .execute()
+        ).data or []
+        for c in clf_rows:
+            cat_label_map[c["key"]] = c["label"]
+            if c.get("description"):
+                cat_desc_map[c["key"]] = c["description"]
+
+    def _cat_label(key: str) -> str:
+        return cat_label_map.get(key, key)
+
     docs = (
         sb.table("documents")
         .select(
@@ -370,23 +405,37 @@ def _build_deal_overview(deal_id: str) -> str:
 
     lines: list[str] = [
         "## Data Room Document Inventory",
+    ]
+
+    # ── Company classification categories (authoritative) ────────────────────
+    if cat_label_map:
+        lines.append("")
+        lines.append("### Document Classification Categories")
+        lines.append("These are the ONLY valid classification categories for this data room. "
+                     "When discussing document types or classifications, use ONLY these names:")
+        for key in cat_label_map:
+            desc_part = f" — {cat_desc_map[key]}" if key in cat_desc_map else ""
+            lines.append(f"  - **{cat_label_map[key]}**{desc_part}")
+        lines.append("")
+
+    lines.extend([
         f"- Total files: {total}  |  Total size: {_fmt_size(total_bytes)}",
         f"- Processed: {len(completed)}  |  RAG-indexed: {len(rag_done)}  "
         f"|  Pending/processing: {len(pending)}  |  Failed: {len(failed)}",
-    ]
+    ])
     if incomplete:
         lines.append(f"- Incomplete documents: {len(incomplete)}")
     if empty:
         lines.append(f"- Empty/unreadable files: {len(empty)}")
     if cat_counts:
         breakdown = ", ".join(
-            f"{cat}: {cnt}" for cat, cnt in sorted(cat_counts.items(), key=lambda x: -x[1])
+            f"{_cat_label(cat)}: {cnt}" for cat, cnt in sorted(cat_counts.items(), key=lambda x: -x[1])
         )
         lines.append(f"- Classification breakdown: {breakdown}")
     lines.append("")
 
     # ── Folder structure ──────────────────────────────────────────────────────
-    folder_tree = _build_folder_tree(docs)
+    folder_tree = _build_folder_tree(docs, cat_label_fn=_cat_label)
     if folder_tree:
         lines.append(folder_tree)
         lines.append("")
@@ -399,7 +448,7 @@ def _build_deal_overview(deal_id: str) -> str:
 
     for doc in sorted(docs, key=_sort_key):
         status = doc.get("processing_status", "unknown")
-        cat = doc.get("assigned_category") or "other"
+        cat = _cat_label(doc.get("assigned_category") or "other")
         ftype = doc.get("file_type") or doc.get("file_extension") or "unknown"
         size_str = _fmt_size(doc.get("file_size"))
         conf = doc.get("classification_confidence") or 0
