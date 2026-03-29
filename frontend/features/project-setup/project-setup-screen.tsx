@@ -123,7 +123,7 @@ function StatusChatLog({
   processingJob: ProcessingJobState
   documents: DealDocument[]
 }) {
-  const entries: { key: string; text: string; icon: React.ReactNode; accent: string }[] = []
+  const entries: { key: string; text: string; icon: React.ReactNode; accent: string; variant?: "success" | "error" | "info" | "muted" }[] = []
 
   // Helper: split "Folder/Sub/file.pdf" → { folders: ["Folder","Sub"], filename: "file.pdf" }
   function splitPath(path: string): { folders: string[]; filename: string } {
@@ -200,11 +200,12 @@ function StatusChatLog({
     entries.push({
       key: "upload-done",
       text: `Upload complete — ${count} file${count !== 1 ? "s" : ""} ready`,
-      icon: <CheckCircle2 className="size-3.5" />,
+      icon: <CheckCircle2 className="size-3.5 text-green-500" />,
       accent: "border-green-500/50",
+      variant: "success" as const,
     })
   } else if (uploadProgress.state === "error") {
-    entries.push({ key: "upload-error", text: `Upload failed: ${(uploadProgress as any).error ?? "Unknown error"}`, icon: <AlertTriangle className="size-3.5" />, accent: "border-red-500/50" })
+    entries.push({ key: "upload-error", text: `Upload failed: ${(uploadProgress as any).error ?? "Unknown error"}`, icon: <AlertTriangle className="size-3.5 text-red-400" />, accent: "border-red-500/50", variant: "error" })
   }
 
   // ── Processing status ──────────────────────────────────────────────────
@@ -379,23 +380,24 @@ function StatusChatLog({
       entries.push({ key: "proc-running", text: `Processing… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     }
   } else if (processingJob.status === "completed") {
-    entries.push({ key: "proc-done", text: "All processing complete", icon: <CheckCircle2 className="size-3.5" />, accent: "border-green-500/50" })
+    entries.push({ key: "proc-done", text: "All processing complete", icon: <CheckCircle2 className="size-3.5 text-green-500" />, accent: "border-green-500/50", variant: "success" })
     const totalDocs = documents.length
     const emptyCount = documents.filter((d) => d.is_empty).length
     const incompleteCount = documents.filter((d) => d.is_incomplete).length
     const ragCount = documents.filter((d) => d.rag_indexed).length
-    entries.push({ key: "proc-summary", text: `↳ ${ragCount}/${totalDocs} docs indexed for chat`, icon: <CheckCircle2 className="size-3.5 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-summary", text: `↳ ${ragCount}/${totalDocs} docs indexed for chat`, icon: <CheckCircle2 className="size-3.5 text-green-500/50" />, accent: "border-transparent", variant: "success" as const })
     if (emptyCount > 0) entries.push({ key: "proc-empty", text: `↳ ${emptyCount} empty file${emptyCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3.5 opacity-40" />, accent: "border-transparent" })
     if (incompleteCount > 0) entries.push({ key: "proc-incomplete", text: `↳ ${incompleteCount} incomplete file${incompleteCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3.5 opacity-40" />, accent: "border-transparent" })
-    entries.push({ key: "proc-hint", text: "↳ Chat is ready — ask anything about the documents", icon: <CheckCircle2 className="size-3.5 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-hint", text: "↳ Chat is ready — ask anything about the documents", icon: <CheckCircle2 className="size-3.5 text-green-500/50" />, accent: "border-transparent", variant: "success" as const })
   } else if (processingJob.status === "failed") {
     entries.push({
       key: "proc-failed",
       text: `Processing failed${processingJob.errorMessage ? `: ${processingJob.errorMessage}` : ""}`,
-      icon: <AlertTriangle className="size-3.5" />,
+      icon: <AlertTriangle className="size-3.5 text-red-400" />,
       accent: "border-red-500/50",
+      variant: "error" as const,
     })
-    entries.push({ key: "proc-retry", text: "↳ Use the Retry button in the Classification tab", icon: <AlertTriangle className="size-3.5 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-retry", text: "↳ Use the Retry button in the Classification tab", icon: <AlertTriangle className="size-3.5 text-red-400/50" />, accent: "border-transparent", variant: "error" as const })
   }
 
   if (entries.length === 0) return null
@@ -407,7 +409,12 @@ function StatusChatLog({
         {entries.map((e) => (
           <div
             key={e.key}
-            className={`flex items-center gap-2 border-l-2 ${e.accent} py-1 pl-2.5 pr-2 font-mono text-[11px] leading-snug text-muted-foreground/70`}
+            className={`flex items-center gap-2 border-l-2 ${e.accent} py-1 pl-2.5 pr-2 font-mono text-[11px] leading-snug ${
+              e.variant === "success" ? "text-green-400"
+              : e.variant === "error" ? "text-red-400"
+              : e.variant === "info" ? "text-blue-400"
+              : "text-muted-foreground/70"
+            }`}
           >
             <span className="shrink-0">{e.icon}</span>
             <span className="truncate">{e.text}</span>
@@ -702,7 +709,7 @@ function TreeNodeRow({
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
                       <HoverTooltip content="Unclassified — this file has not been processed yet. Run the AI processing to classify it.">
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Unclassified</span>
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">Unclassified</span>
                       </HoverTooltip>
                     )}
                   </div>
@@ -1057,7 +1064,7 @@ function FileStructurePanel({
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
                       <HoverTooltip content="Unclassified — this file has not been processed yet. Run the AI processing to classify it.">
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Unclassified</span>
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500 cursor-default">Unclassified</span>
                       </HoverTooltip>
                     )}
                   </div>
@@ -2116,7 +2123,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
         )}
 
         <div className="flex min-h-0 min-w-[320px] flex-1 flex-col gap-2 px-3 py-2 md:gap-2.5 md:px-4 md:py-3">
-          <div className="shrink-0">
+          {(isDemoWorkspace || dealData.documents.length > 0) && <div className="shrink-0">
             <ToggleGroup
               type="single"
               value={section}
@@ -2195,7 +2202,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                 </>
               )}
             </ToggleGroup>
-          </div>
+          </div>}
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg px-0.5 pt-1 pb-1 md:px-1">
             {section === "upload" ? (
               <div className={showDropzone && selectedFiles.length === 0 && dealData.documents.length === 0 ? "flex flex-1 flex-col items-center justify-center" : "space-y-3"}>
