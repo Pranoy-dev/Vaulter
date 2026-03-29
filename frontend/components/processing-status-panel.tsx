@@ -19,14 +19,19 @@ const STAGES = [
     description: "Extracting and indexing text for RAG search",
   },
   {
+    key: "detecting_hash_duplicates" as const,
+    label: "Hash Duplicate Detection",
+    description: "Finding identical files by SHA-256 hash",
+  },
+  {
     key: "document_processing" as const,
     label: "AI Document Processing",
     description: "Extracting text, classifying, and checking completeness via Gemini",
   },
   {
     key: "detecting_duplicates" as const,
-    label: "Duplicate Detection",
-    description: "Finding exact and near-duplicate files",
+    label: "Content Duplicate Detection",
+    description: "Finding near-duplicate files by content similarity",
   },
   {
     key: "linking_documents" as const,

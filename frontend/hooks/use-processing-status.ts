@@ -9,6 +9,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
 export type ProcessingStatus = "pending" | "running" | "completed" | "failed" | null
 export type ProcessingStage =
   | "indexing"
+  | "detecting_hash_duplicates"
   | "document_processing"
   | "detecting_duplicates"
   | "linking_documents"
@@ -37,6 +38,7 @@ export interface ProcessingJobState {
 
 const STAGE_ORDER: Exclude<ProcessingStage, null | "done">[] = [
   "indexing",
+  "detecting_hash_duplicates",
   "document_processing",
   "detecting_duplicates",
   "linking_documents",

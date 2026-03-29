@@ -89,7 +89,7 @@ function ChatHistorySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-72 p-0 flex flex-col">
+      <SheetContent side="left" className="w-72 p-0 flex flex-col">
         <SheetHeader className="px-4 pt-4 pb-3 border-b border-white/10">
           <SheetTitle className="text-sm">Chat History</SheetTitle>
         </SheetHeader>
@@ -143,6 +143,7 @@ function ChatInstance({
   onDeleteChat,
   onOpenHistory,
   isDeleting,
+  chatDisabled,
 }: {
   chatPrepend?: ReactNode
   dealId?: string | null
@@ -151,6 +152,7 @@ function ChatInstance({
   onDeleteChat: (sessionId: string) => void
   onOpenHistory: () => void
   isDeleting: boolean
+  chatDisabled?: boolean
 }) {
   const sessionId = initialSessionId
 
@@ -232,7 +234,7 @@ function ChatInstance({
             "[&_.aui-thread-scroll-to-bottom]:self-start [&_.aui-thread-scroll-to-bottom]:left-2 [&_.aui-thread-scroll-to-bottom]:-translate-x-0",
           )}
         >
-          <Thread chatPrepend={chatPrepend} />
+          <Thread chatPrepend={chatPrepend} disabled={chatDisabled} />
         </div>
       </div>
     </AssistantRuntimeProvider>
@@ -244,9 +246,11 @@ function ChatInstance({
 export function ProjectSetupAssistant({
   chatPrepend,
   dealId,
+  chatDisabled,
 }: {
   chatPrepend?: ReactNode
   dealId?: string | null
+  chatDisabled?: boolean
 }) {
   const { getToken } = useAuth()
   // resetKey forces full re-mount of ChatInstance (new session)
@@ -308,6 +312,7 @@ export function ProjectSetupAssistant({
         onDeleteChat={handleDeleteChat}
         onOpenHistory={() => setHistoryOpen(true)}
         isDeleting={isDeleting}
+        chatDisabled={chatDisabled}
       />
       <ChatHistorySheet
         open={historyOpen}

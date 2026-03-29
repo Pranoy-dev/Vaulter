@@ -176,16 +176,18 @@ export default function Page() {
 
   return (
     <SidebarProvider className="h-full">
-      <AppSidebar
-        key={sidebarRefreshKey}
-        onHome={goHome}
-        onNewProject={() => setNewProjectDialogOpen(true)}
-        selectedDealId={selectedDealId}
-        onOpenDeal={openDeal}
-        onDealDeleted={(id) => {
-          if (selectedDealId === id) goHome()
-        }}
-      />
+      {!selectedDealId && (
+        <AppSidebar
+          key={sidebarRefreshKey}
+          onHome={goHome}
+          onNewProject={() => setNewProjectDialogOpen(true)}
+          selectedDealId={selectedDealId}
+          onOpenDeal={openDeal}
+          onDealDeleted={(id) => {
+            if (selectedDealId === id) goHome()
+          }}
+        />
+      )}
       <SidebarInset className="min-h-0">
         {selectedDealId ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

@@ -133,6 +133,7 @@ class DuplicateGroupMemberResponse(BaseModel):
     id: uuid.UUID
     document_id: uuid.UUID
     is_canonical: bool
+    similarity_score: float | None = None
     # Joined fields
     filename: str | None = None
     original_path: str | None = None

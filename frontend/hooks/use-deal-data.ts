@@ -39,6 +39,7 @@ export interface DuplicateMember {
   id: string
   document_id: string
   is_canonical: boolean
+  similarity_score: number | null
   filename: string | null
   original_path: string | null
   file_size: number | null

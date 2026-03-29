@@ -239,6 +239,7 @@ class DuplicateGroupMember(Base):
     group_id = Column(UUID(as_uuid=True), ForeignKey("duplicate_groups.id", ondelete="CASCADE"), nullable=False)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     is_canonical = Column(Boolean, default=False)
+    similarity_score = Column(Float, nullable=True)
 
     group = relationship("DuplicateGroup", back_populates="members")
 
@@ -302,7 +303,7 @@ class ProcessingJob(Base):
         server_default="pending",
     )
     current_stage = Column(
-        Enum("indexing", "document_processing", "detecting_duplicates", "linking_documents", "building_overview", "done",
+        Enum("indexing", "detecting_hash_duplicates", "document_processing", "detecting_duplicates", "linking_documents", "building_overview", "done",
              name="processing_stage", create_type=True),
         server_default="indexing",
     )

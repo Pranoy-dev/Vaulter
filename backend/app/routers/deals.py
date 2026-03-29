@@ -199,6 +199,7 @@ async def list_duplicates(
                     id=m["id"],
                     document_id=m["document_id"],
                     is_canonical=m["is_canonical"],
+                    similarity_score=m.get("similarity_score"),
                     filename=doc_info.get("filename"),
                     original_path=doc_info.get("original_path"),
                     file_size=doc_info.get("file_size"),

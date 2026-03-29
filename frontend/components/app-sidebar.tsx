@@ -17,7 +17,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail,
 } from "@/components/ui/sidebar"
 import {
   Dialog,
@@ -219,7 +218,6 @@ export function AppSidebar({
           </div>
         </div>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
     <DeleteProjectDialog
       deal={pendingDelete}

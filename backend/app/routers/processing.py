@@ -71,9 +71,15 @@ async def _run_pipeline(deal_id: str):
 
         # Stage 1: Indexing (already done during upload — just mark progress)
         await asyncio.sleep(0.5)  # Small pause for UX
+        await _update_job(deal_id, progress=0.05)
+
+        # Stage 2: Hash-based duplicate detection (fast, pre-AI)
+        await _update_job(deal_id, stage="detecting_hash_duplicates", progress=0.06)
+        from app.services.duplicate_detection import detect_hash_duplicates, detect_content_duplicates
+        await asyncio.to_thread(detect_hash_duplicates, deal_id)
         await _update_job(deal_id, progress=0.10)
 
-        # Stage 2: Document Processing (Gemini extraction + classification + completeness)
+        # Stage 3: Document Processing (Gemini extraction + classification + completeness)
         await _update_job(deal_id, stage="document_processing", progress=0.12)
         from app.services.gemini_processor import process_deal_documents
 
@@ -112,10 +118,9 @@ async def _run_pipeline(deal_id: str):
         await asyncio.to_thread(process_deal_documents, deal_id, _progress_cb)
         await _update_job(deal_id, progress=0.50, sub_stage=None, stage_detail=None, current_file=None)
 
-        # Stage 3: Duplicate Detection
+        # Stage 4: Content-based duplicate detection (post-AI, with similarity %)
         await _update_job(deal_id, stage="detecting_duplicates", progress=0.52)
-        from app.services.duplicate_detection import detect_duplicates
-        await asyncio.to_thread(detect_duplicates, deal_id)
+        await asyncio.to_thread(detect_content_duplicates, deal_id)
         await _update_job(deal_id, progress=0.70)
 
         # Stage 4: Lease & Amendment Linking

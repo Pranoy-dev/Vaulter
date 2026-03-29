@@ -60,7 +60,8 @@ import { useDealData } from "@/hooks/use-deal-data"
 import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-data"
 import { useClassifications } from "@/hooks/use-classifications"
 import type { Classification } from "@/hooks/use-classifications"
-import { useProcessingStatus } from "@/hooks/use-processing-status"
+import { useProcessingStatus, stageStatus } from "@/hooks/use-processing-status"
+import type { ProcessingJobState } from "@/hooks/use-processing-status"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type SetupSection =
@@ -87,6 +88,322 @@ function ClickTooltip({ content, children }: { content: string; children: React.
       </TooltipTrigger>
       <TooltipContent className="max-w-xs whitespace-pre-wrap">{content}</TooltipContent>
     </Tooltip>
+  )
+}
+
+// ── Temporary status log shown as chat-bubble messages (not persisted to DB) ──
+
+const STAGE_LABELS: Record<string, string> = {
+  indexing: "Indexing documents for search…",
+  detecting_hash_duplicates: "Checking for identical files…",
+  document_processing: "Running AI classification & embeddings…",
+  detecting_duplicates: "Detecting content duplicates…",
+  linking_documents: "Linking lease amendments…",
+  building_overview: "Building project overview…",
+  done: "Processing complete!",
+}
+
+function StatusChatLog({
+  uploadProgress,
+  processingJob,
+  documents,
+}: {
+  uploadProgress: UploadProgress
+  processingJob: ProcessingJobState
+  documents: DealDocument[]
+}) {
+  const entries: { key: string; text: string; icon: React.ReactNode; accent: string }[] = []
+
+  // Helper: split "Folder/Sub/file.pdf" → { folders: ["Folder","Sub"], filename: "file.pdf" }
+  function splitPath(path: string): { folders: string[]; filename: string } {
+    const parts = path.replace(/\\/g, "/").split("/")
+    const filename = parts.pop() ?? path
+    return { folders: parts.filter(Boolean), filename }
+  }
+
+  // Push folder-then-file entries for a given path
+  function pushFilePath(
+    keyPrefix: string,
+    path: string,
+    icon: React.ReactNode,
+    accent: string,
+    suffix?: string,
+  ) {
+    const { folders, filename } = splitPath(path)
+    if (folders.length > 0) {
+      entries.push({
+        key: `${keyPrefix}-folders`,
+        text: `📁 ${folders.join(" / ")}`,
+        icon: <FileIcon className="size-3 opacity-40" />,
+        accent: "border-transparent",
+      })
+    }
+    entries.push({
+      key: `${keyPrefix}-name`,
+      text: `↳ ${filename}${suffix ? ` ${suffix}` : ""}`,
+      icon,
+      accent,
+    })
+  }
+
+  // Find the most recently classified document for inline result
+  const lastClassified = React.useMemo(() => {
+    return documents
+      .filter((d) => d.classified_at && d.classification_confidence > 0)
+      .sort((a, b) => (b.classified_at ?? "").localeCompare(a.classified_at ?? ""))[0] ?? null
+  }, [documents])
+  // ── Upload status ──────────────────────────────────────────────────────
+  if (uploadProgress.state === "initializing") {
+    entries.push({ key: "upload-init", text: "Preparing upload…", icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+  } else if (uploadProgress.state === "uploading") {
+    const fileEntries = Object.values(uploadProgress.files)
+    const fileCount = fileEntries.length
+    const doneCount = fileEntries.filter((f) => f.progress >= 1).length
+    entries.push({
+      key: "upload-progress",
+      text: `Uploading files — ${uploadProgress.overall}%`,
+      icon: <Loader2 className="size-3 animate-spin" />,
+      accent: "border-blue-500/50",
+    })
+    entries.push({
+      key: "upload-count",
+      text: `↳ ${doneCount} of ${fileCount} file${fileCount !== 1 ? "s" : ""} done`,
+      icon: <FileIcon className="size-3 opacity-50" />,
+      accent: "border-transparent",
+    })
+    // Show the file currently in progress
+    const current = fileEntries.find((f) => f.progress > 0 && f.progress < 1)
+    if (current) {
+      pushFilePath(
+        "upload-current",
+        current.relativePath,
+        <Loader2 className="size-3 animate-spin opacity-60" />,
+        "border-transparent",
+        `(${Math.round(current.progress * 100)}%)`,
+      )
+    }
+  } else if (uploadProgress.state === "completing") {
+    entries.push({ key: "upload-completing", text: "Finalizing upload…", icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+  } else if (uploadProgress.state === "done") {
+    const count = Object.keys(uploadProgress.files).length
+    entries.push({
+      key: "upload-done",
+      text: `Upload complete — ${count} file${count !== 1 ? "s" : ""} ready`,
+      icon: <CheckCircle2 className="size-3" />,
+      accent: "border-green-500/50",
+    })
+  } else if (uploadProgress.state === "error") {
+    entries.push({ key: "upload-error", text: `Upload failed: ${(uploadProgress as any).error ?? "Unknown error"}`, icon: <AlertTriangle className="size-3" />, accent: "border-red-500/50" })
+  }
+
+  // ── Processing status ──────────────────────────────────────────────────
+  if (processingJob.status === "pending") {
+    entries.push({ key: "proc-pending", text: "Processing queued — waiting to start…", icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+  } else if (processingJob.status === "running") {
+    const stage = processingJob.currentStage
+    const pct = Math.round(processingJob.progress * 100)
+
+    if (stage === "indexing") {
+      entries.push({ key: "proc-indexing", text: `Indexing documents for search… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    } else if (stage === "detecting_hash_duplicates") {
+      entries.push({ key: "proc-hash", text: `Scanning for identical files by hash… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    } else if (stage === "document_processing") {
+      const subLabel = processingJob.subStage === "ai_processing"
+        ? "AI Classification"
+        : processingJob.subStage === "rag_processing"
+          ? "RAG Embedding"
+          : "AI Processing"
+      entries.push({ key: "proc-doc", text: `${subLabel}… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+
+      if (processingJob.aiDetail) {
+        const { current, total } = processingJob.aiDetail
+        const bar = total > 0 ? `${"█".repeat(Math.round((current / total) * 8))}${"░".repeat(8 - Math.round((current / total) * 8))}` : "░░░░░░░░"
+        entries.push({
+          key: "proc-ai",
+          text: `↳ AI classify  ${bar}  ${current}/${total}`,
+          icon: <FileIcon className="size-3 opacity-50" />,
+          accent: "border-transparent",
+        })
+      }
+      if (processingJob.ragDetail) {
+        const { current, total } = processingJob.ragDetail
+        const bar = total > 0 ? `${"█".repeat(Math.round((current / total) * 8))}${"░".repeat(8 - Math.round((current / total) * 8))}` : "░░░░░░░░"
+        entries.push({
+          key: "proc-rag",
+          text: `↳ RAG embed    ${bar}  ${current}/${total}`,
+          icon: <FileIcon className="size-3 opacity-50" />,
+          accent: "border-transparent",
+        })
+      }
+      if (processingJob.currentFile) {
+        pushFilePath(
+          "proc-file",
+          processingJob.currentFile,
+          <Loader2 className="size-3 animate-spin opacity-40" />,
+          "border-transparent",
+        )
+      }
+      // ── Last classified file result ────────────────────────────────
+      if (lastClassified) {
+        const catLabel = CATEGORY_LABELS[lastClassified.assigned_category] ?? lastClassified.assigned_category
+        const conf = Math.round(lastClassified.classification_confidence * 100)
+        const { folders: lcFolders, filename: lcFilename } = splitPath(lastClassified.original_path || lastClassified.filename)
+        if (lcFolders.length > 0) {
+          entries.push({
+            key: "last-file-folder",
+            text: `Last: 📁 ${lcFolders.join(" / ")}`,
+            icon: <CheckCircle2 className="size-3 opacity-60" />,
+            accent: "border-violet-500/40",
+          })
+          entries.push({
+            key: "last-file-name",
+            text: `↳ ${lcFilename}`,
+            icon: <FileIcon className="size-3 opacity-40" />,
+            accent: "border-violet-500/40",
+          })
+        } else {
+          entries.push({
+            key: "last-file-name",
+            text: `Last: ${lcFilename}`,
+            icon: <CheckCircle2 className="size-3 opacity-60" />,
+            accent: "border-violet-500/40",
+          })
+        }
+        // Category + confidence
+        entries.push({
+          key: "last-file-cat",
+          text: `↳ ${catLabel} (${conf}% confidence)`,
+          icon: <FileIcon className="size-3 opacity-40" />,
+          accent: "border-transparent",
+        })
+        // Classification reasoning (truncated)
+        if (lastClassified.classification_reasoning) {
+          const reason = lastClassified.classification_reasoning.length > 90
+            ? lastClassified.classification_reasoning.slice(0, 87) + "…"
+            : lastClassified.classification_reasoning
+          entries.push({
+            key: "last-file-reason",
+            text: `↳ Why: ${reason}`,
+            icon: <FileIcon className="size-3 opacity-30" />,
+            accent: "border-transparent",
+          })
+        }
+        // Parties
+        if (lastClassified.parties && lastClassified.parties.length > 0) {
+          const partyList = lastClassified.parties.slice(0, 3).join(", ") + (lastClassified.parties.length > 3 ? ` +${lastClassified.parties.length - 3} more` : "")
+          entries.push({
+            key: "last-file-parties",
+            text: `↳ Parties: ${partyList}`,
+            icon: <FileIcon className="size-3 opacity-30" />,
+            accent: "border-transparent",
+          })
+        }
+        // Expiry date
+        if (lastClassified.expiry_date) {
+          entries.push({
+            key: "last-file-expiry",
+            text: `↳ Expires: ${lastClassified.expiry_date}`,
+            icon: <FileIcon className="size-3 opacity-30" />,
+            accent: "border-transparent",
+          })
+        }
+        // Signature / seal indicators
+        const docTraits: string[] = []
+        if (lastClassified.has_signature) docTraits.push("Signed ✓")
+        if (lastClassified.has_seal) docTraits.push("Sealed ✓")
+        if (docTraits.length > 0) {
+          entries.push({
+            key: "last-file-traits",
+            text: `↳ ${docTraits.join("  ·  ")}`,
+            icon: <CheckCircle2 className="size-3 opacity-30" />,
+            accent: "border-transparent",
+          })
+        }
+        // Empty flag
+        if (lastClassified.is_empty) {
+          entries.push({
+            key: "last-file-empty",
+            text: "↳ ⚠ No content extracted — file may be empty or unreadable",
+            icon: <AlertTriangle className="size-3 opacity-50" />,
+            accent: "border-amber-500/40",
+          })
+        }
+        // Incompleteness reasons
+        if (lastClassified.is_incomplete) {
+          if (lastClassified.incompleteness_reasons && lastClassified.incompleteness_reasons.length > 0) {
+            lastClassified.incompleteness_reasons.forEach((r, i) => {
+              entries.push({
+                key: `last-file-incomplete-${i}`,
+                text: `↳ ⚠ Incomplete: ${r}`,
+                icon: <AlertTriangle className="size-3 opacity-50" />,
+                accent: "border-amber-500/40",
+              })
+            })
+          } else {
+            entries.push({
+              key: "last-file-incomplete",
+              text: "↳ ⚠ Document appears incomplete",
+              icon: <AlertTriangle className="size-3 opacity-50" />,
+              accent: "border-amber-500/40",
+            })
+          }
+        }
+        // Processing error
+        if (lastClassified.processing_error) {
+          entries.push({
+            key: "last-file-error",
+            text: `↳ Error: ${lastClassified.processing_error}`,
+            icon: <AlertTriangle className="size-3 opacity-50" />,
+            accent: "border-red-500/40",
+          })
+        }
+      }
+    } else if (stage === "detecting_duplicates") {
+      entries.push({ key: "proc-dup", text: `Comparing document content for duplicates… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    } else if (stage === "linking_documents") {
+      entries.push({ key: "proc-lease", text: `Building lease amendment chains… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    } else if (stage === "building_overview") {
+      entries.push({ key: "proc-overview", text: `Computing summaries and statistics… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    } else {
+      entries.push({ key: "proc-running", text: `Processing… (${pct}%)`, icon: <Loader2 className="size-3 animate-spin" />, accent: "border-blue-500/50" })
+    }
+  } else if (processingJob.status === "completed") {
+    entries.push({ key: "proc-done", text: "All processing complete", icon: <CheckCircle2 className="size-3" />, accent: "border-green-500/50" })
+    const totalDocs = documents.length
+    const emptyCount = documents.filter((d) => d.is_empty).length
+    const incompleteCount = documents.filter((d) => d.is_incomplete).length
+    const ragCount = documents.filter((d) => d.rag_indexed).length
+    entries.push({ key: "proc-summary", text: `↳ ${ragCount}/${totalDocs} docs indexed for chat`, icon: <CheckCircle2 className="size-3 opacity-40" />, accent: "border-transparent" })
+    if (emptyCount > 0) entries.push({ key: "proc-empty", text: `↳ ${emptyCount} empty file${emptyCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3 opacity-40" />, accent: "border-transparent" })
+    if (incompleteCount > 0) entries.push({ key: "proc-incomplete", text: `↳ ${incompleteCount} incomplete file${incompleteCount !== 1 ? "s" : ""} detected`, icon: <AlertTriangle className="size-3 opacity-40" />, accent: "border-transparent" })
+    entries.push({ key: "proc-hint", text: "↳ Chat is ready — ask anything about the documents", icon: <CheckCircle2 className="size-3 opacity-40" />, accent: "border-transparent" })
+  } else if (processingJob.status === "failed") {
+    entries.push({
+      key: "proc-failed",
+      text: `Processing failed${processingJob.errorMessage ? `: ${processingJob.errorMessage}` : ""}`,
+      icon: <AlertTriangle className="size-3" />,
+      accent: "border-red-500/50",
+    })
+    entries.push({ key: "proc-retry", text: "↳ Use the Retry button in the Classification tab", icon: <AlertTriangle className="size-3 opacity-40" />, accent: "border-transparent" })
+  }
+
+  if (entries.length === 0) return null
+
+  return (
+    <div className="px-2 py-2">
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/30">System</p>
+      <div className="space-y-0.5">
+        {entries.map((e) => (
+          <div
+            key={e.key}
+            className={`flex items-center gap-2 border-l-2 ${e.accent} py-1 pl-2.5 pr-2 font-mono text-[11px] leading-snug text-white/50`}
+          >
+            <span className="shrink-0">{e.icon}</span>
+            <span className="truncate">{e.text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -913,7 +1230,7 @@ function DuplicationPanel({
                   ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
                   : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
               }`}>
-                {group.match_type}
+                {group.match_type === "exact" ? "Identical File" : "Content Match"}
               </span>
             </div>
             <div className="divide-y divide-border/30">
@@ -936,6 +1253,11 @@ function DuplicationPanel({
                     <span className="truncate">{m.filename ?? m.original_path ?? "Unknown"}</span>
                   </button>
                   <div className="flex items-center gap-3 shrink-0">
+                    {!m.is_canonical && group.match_type === "near" && m.similarity_score != null && (
+                      <span className="text-[11px] tabular-nums font-medium text-amber-600 dark:text-amber-400">
+                        {Math.round(m.similarity_score * 100)}%
+                      </span>
+                    )}
                     <span className="w-16 text-right text-[11px] tabular-nums text-muted-foreground/40">
                       {m.file_size != null ? formatBytes(m.file_size) : ""}
                     </span>
@@ -1424,7 +1746,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
     const startWidth = chatWidth
 
     const onMouseMove = (ev: MouseEvent) => {
-      const delta = startX - ev.clientX
+      const delta = ev.clientX - startX
       const maxWidth = Math.floor(window.innerWidth * 0.8) - 320
       const next = Math.min(maxWidth, Math.max(240, startWidth + delta))
       setChatWidth(next)
@@ -1666,6 +1988,62 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row md:items-stretch">
 
+        {/* Chat panel — left side, collapsible */}
+        {chatOpen ? (
+          <Card
+            className="dark group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent [color-scheme:dark] md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-white/[0.09] md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)]"
+            style={{ width: chatWidth }}
+          >
+            {/* Drag handle on the right border */}
+            <div
+              onMouseDown={startDrag}
+              className="absolute top-0 right-0 z-10 hidden h-full w-3 cursor-col-resize md:flex"
+              aria-hidden
+            >
+              <div className="m-auto flex h-16 w-full items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100">
+                <GripVertical className="size-4 text-white/50" />
+              </div>
+            </div>
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-0 p-0">
+              <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.09] px-2 py-2.5 md:px-3">
+                <h2 className="min-w-0 flex-1 truncate text-center text-sm font-semibold tracking-tight text-foreground">
+                  AI Assistant
+                </h2>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0 text-foreground/60 hover:bg-white/10 hover:text-foreground"
+                  onClick={() => setChatOpen(false)}
+                  aria-label="Collapse chat"
+                >
+                  <PanelRightClose className="size-4" />
+                </Button>
+              </header>
+              <div className="min-h-0 flex-1">
+                <ProjectSetupAssistant
+                  chatPrepend={isDemoWorkspace ? <DemoAgentProcessingLog /> : <StatusChatLog uploadProgress={uploadProgress} processingJob={processingJob} documents={dealData.documents} />}
+                  dealId={dealId}
+                  chatDisabled={!isDemoWorkspace && !dealData.documents.some((d) => d.rag_indexed)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="dark hidden shrink-0 flex-col items-center border-r border-white/[0.09] bg-card py-2 [color-scheme:dark] md:flex md:w-7">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 text-foreground/60 hover:bg-white/10 hover:text-foreground"
+              onClick={() => setChatOpen(true)}
+              aria-label="Open chat"
+            >
+              <PanelRightOpen className="size-4" />
+            </Button>
+          </div>
+        )}
+
         <div className="flex min-h-0 min-w-[320px] flex-1 flex-col gap-2 px-3 py-2 md:gap-2.5 md:px-4 md:py-3">
           <div className="shrink-0">
             <ToggleGroup
@@ -1687,58 +2065,64 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                 <FolderUp aria-hidden />
                 Upload
               </ToggleGroupItem>
-              <ToggleGroupItem
-                value="duplication"
-                aria-label="Duplication"
-                className={sectionToggleItemClass}
-              >
-                <Copy aria-hidden />
-                Duplication
-                {dealData.duplicates.length > 0 && (
-                  <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950/50 dark:text-red-400">
-                    {dealData.duplicates.length}
-                  </span>
-                )}
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="file-structure"
-                aria-label="Classification"
-                className={sectionToggleItemClass}
-              >
-                <LayoutGrid aria-hidden />
-                Classification
-                {dealData.documents.length > 0 && (() => {
-                  const classified = dealData.documents.filter((d) => d.classification_confidence > 0 && !d.is_empty && !d.is_incomplete).length
-                  const pct = Math.round((classified / dealData.documents.length) * 100)
-                  return (
-                    <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
-                      pct === 100
-                        ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-                        : pct >= 80
-                          ? "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400"
-                          : "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
-                    }`}>
-                      {pct}%
-                    </span>
-                  )
-                })()}
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="lease-amendment"
-                aria-label="Lease amendment"
-                className={sectionToggleItemClass}
-              >
-                <FilePenLine aria-hidden />
-                Lease Amendment
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="ai-insights"
-                aria-label="AI insights"
-                className={sectionToggleItemClass}
-              >
-                <Sparkles aria-hidden />
-                AI Insights
-              </ToggleGroupItem>
+              {(isDemoWorkspace || dealData.documents.length > 0) && (
+                <>
+                  {(isDemoWorkspace || dealData.duplicates.length > 0) && (
+                    <ToggleGroupItem
+                      value="duplication"
+                      aria-label="Duplication"
+                      className={sectionToggleItemClass}
+                    >
+                      <Copy aria-hidden />
+                      Duplication
+                      {dealData.duplicates.length > 0 && (
+                        <span className="ml-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-red-700 dark:bg-red-950/50 dark:text-red-400">
+                          {dealData.duplicates.length}
+                        </span>
+                      )}
+                    </ToggleGroupItem>
+                  )}
+                  <ToggleGroupItem
+                    value="file-structure"
+                    aria-label="Classification"
+                    className={sectionToggleItemClass}
+                  >
+                    <LayoutGrid aria-hidden />
+                    Classification
+                    {dealData.documents.length > 0 && (() => {
+                      const classified = dealData.documents.filter((d) => d.classification_confidence > 0 && !d.is_empty && !d.is_incomplete).length
+                      const pct = Math.round((classified / dealData.documents.length) * 100)
+                      return (
+                        <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                          pct === 100
+                            ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                            : pct >= 80
+                              ? "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400"
+                              : "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+                        }`}>
+                          {pct}%
+                        </span>
+                      )
+                    })()}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="lease-amendment"
+                    aria-label="Lease amendment"
+                    className={sectionToggleItemClass}
+                  >
+                    <FilePenLine aria-hidden />
+                    Lease Amendment
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="ai-insights"
+                    aria-label="AI insights"
+                    className={sectionToggleItemClass}
+                  >
+                    <Sparkles aria-hidden />
+                    AI Insights
+                  </ToggleGroupItem>
+                </>
+              )}
             </ToggleGroup>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg px-0.5 pt-1 pb-1 md:px-1">
@@ -2376,60 +2760,6 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
           </div>
         </div>
 
-        {/* Chat panel — right side, collapsible */}
-        {chatOpen ? (
-          <Card
-            className="dark group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent [color-scheme:dark] md:flex-none md:self-stretch md:border-t-0 md:border-l md:border-white/[0.09] md:rounded-none md:shadow-[-2px_0_18px_-6px_rgba(0,0,0,0.12)]"
-            style={{ width: chatWidth }}
-          >
-            {/* Drag handle on the left border */}
-            <div
-              onMouseDown={startDrag}
-              className="absolute top-0 left-0 z-10 hidden h-full w-3 cursor-col-resize md:flex"
-              aria-hidden
-            >
-              <div className="m-auto flex h-16 w-full items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100">
-                <GripVertical className="size-4 text-white/50" />
-              </div>
-            </div>
-            <CardContent className="flex min-h-0 flex-1 flex-col gap-0 p-0">
-              <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.09] px-2 py-2.5 md:px-3">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 shrink-0 text-foreground/60 hover:bg-white/10 hover:text-foreground"
-                  onClick={() => setChatOpen(false)}
-                  aria-label="Collapse chat"
-                >
-                  <PanelRightClose className="size-4" />
-                </Button>
-                <h2 className="min-w-0 flex-1 truncate text-center text-sm font-semibold tracking-tight text-foreground">
-                  AI Assistant
-                </h2>
-              </header>
-              <div className="min-h-0 flex-1">
-                <ProjectSetupAssistant
-                  chatPrepend={isDemoWorkspace ? <DemoAgentProcessingLog /> : undefined}
-                  dealId={dealId}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="dark hidden shrink-0 flex-col items-center border-l border-white/[0.09] bg-card py-2 [color-scheme:dark] md:flex md:w-7">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-foreground/60 hover:bg-white/10 hover:text-foreground"
-              onClick={() => setChatOpen(true)}
-              aria-label="Open chat"
-            >
-              <PanelRightOpen className="size-4" />
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   )
