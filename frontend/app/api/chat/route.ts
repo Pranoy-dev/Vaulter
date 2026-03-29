@@ -10,70 +10,79 @@ import {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? ""
 
-type RagResult =
-  | { ok: true; context: string }
+type ChatContextResult =
+  | {
+      ok: true
+      context: string
+      session_id: string
+      sources: Array<{ filename?: string; category?: string; score: number; document_id: string }>
+      condensed_query: string
+    }
   | { ok: false; reason: "auth_expired" | "no_data" | "error" }
 
-/**
- * Expand short/vague queries into richer semantic terms so cosine similarity
- * has more signal to work with. Maps common intents to domain vocabulary.
- */
-function expandQuery(query: string): string {
-  const q = query.toLowerCase()
-  const expansions: Array<[RegExp, string]> = [
-    [/\bclients?\b|\btenants?\b|\blessees?\b|\bparties\b|\bbuyers?\b|\bsellers?\b/,
-      "client tenant lessee buyer seller party company name signatory principal"],
-    [/\brent\b|\blease\b|\bmonthly\b|\bpayment\b/,
-      "rent amount monthly payment lease term rental price"],
-    [/\bexpir(y|ation|e)\b|\bend date\b|\btermination\b/,
-      "expiry date termination end date lease expiration"],
-    [/\bsignatur(e|es)\b|\bsigned\b|\bexecut(ed|ion)\b/,
-      "signature signed executed parties execution date"],
-    [/\bfinancial\b|\bprice\b|\bvalue\b|\bamount\b/,
-      "financial terms price value amount payment cost"],
-  ]
-  let expanded = query
-  for (const [pattern, extra] of expansions) {
-    if (pattern.test(q)) {
-      expanded = `${query} ${extra}`
-      break
-    }
-  }
-  return expanded
-}
-
-/** Call backend RAG search and return formatted context block or a typed failure. */
-async function fetchRagContext(
+/** Call backend chat/context endpoint — handles history, condensation, deal overview + RAG. */
+async function fetchChatContext(
   query: string,
   dealId: string,
   authToken: string,
-): Promise<RagResult> {
+  sessionId?: string | null,
+): Promise<ChatContextResult> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/deals/${dealId}/search`, {
+    const res = await fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/context`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ query, top_k: 12 }),
+      body: JSON.stringify({
+        query,
+        session_id: sessionId ?? undefined,
+        top_k: 12,
+      }),
     })
     if (res.status === 401 || res.status === 403) return { ok: false, reason: "auth_expired" }
     if (!res.ok) return { ok: false, reason: "error" }
     const body = await res.json()
-    const chunks: Array<{ content: string; filename?: string; score: number }> =
-      body.data ?? []
-    if (!chunks.length) return { ok: false, reason: "no_data" }
-
-    const lines = chunks.map((c, i) => {
-      const src = c.filename ? ` [${c.filename}]` : ""
-      return `### Chunk ${i + 1}${src} (relevance: ${(c.score * 100).toFixed(0)}%)\n${c.content}`
-    })
+    const data = body.data
+    if (!data?.has_data) return { ok: false, reason: "no_data" }
     return {
       ok: true,
-      context: `The following excerpts are the most relevant passages retrieved from the data room documents for this query:\n\n${lines.join("\n\n")}`,
+      context: data.context,
+      session_id: data.session_id,
+      sources: data.sources ?? [],
+      condensed_query: data.condensed_query,
     }
   } catch {
     return { ok: false, reason: "error" }
+  }
+}
+
+/** Save user+assistant message pair after streaming completes. */
+async function saveMessages(
+  dealId: string,
+  authToken: string,
+  sessionId: string,
+  userMessage: string,
+  assistantMessage: string,
+  sources?: Array<Record<string, unknown>>,
+): Promise<void> {
+  try {
+    await fetch(`${BACKEND_URL}/api/deals/${dealId}/chat/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        user_message: userMessage,
+        assistant_message: assistantMessage,
+        sources: sources ?? null,
+      }),
+    })
+  } catch {
+    // Best-effort — don't break the chat if save fails
+    console.error("[chat] Failed to persist messages")
   }
 }
 
@@ -89,10 +98,13 @@ export async function POST(req: Request) {
   >
   const dealId: string | undefined = body.dealId
   const authToken: string | undefined = body.authToken
+  const sessionId: string | undefined = body.sessionId
 
   // Extract the latest user message text for RAG retrieval
   let ragContext = ""
   let ragNotice = ""
+  let activeSessionId: string | undefined = sessionId
+  let ragSources: Array<Record<string, unknown>> = []
 
   if (dealId && authToken) {
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")
@@ -103,10 +115,11 @@ export async function POST(req: Request) {
           .join(" ")
       : ""
     if (queryText.trim()) {
-      const expandedQuery = expandQuery(queryText.trim())
-      const result = await fetchRagContext(expandedQuery, dealId, authToken)
+      const result = await fetchChatContext(queryText.trim(), dealId, authToken, sessionId)
       if (result.ok) {
         ragContext = result.context
+        activeSessionId = result.session_id
+        ragSources = result.sources
       } else if (result.reason === "auth_expired") {
         ragNotice =
           "The user's session has expired and document search is temporarily unavailable. " +
@@ -116,7 +129,6 @@ export async function POST(req: Request) {
           "No indexed document data was found for this deal. The files in this data room have not been processed for RAG yet. " +
           "Let the user know that no document data is available and suggest they run AI processing first."
       }
-      // reason === "error": backend unreachable — answer without RAG context, no special notice
     }
   } else if (dealId && !authToken) {
     ragNotice =
@@ -140,12 +152,34 @@ export async function POST(req: Request) {
     .filter(Boolean)
     .join("\n\n")
 
+  // Get the user's last message text for persistence
+  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user")
+  const userQueryText = lastUserMsg
+    ? lastUserMsg.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join(" ")
+    : ""
+
   const result = streamText({
     model: openai("gpt-4o"),
     messages: await convertToModelMessages(messages),
     ...(effectiveSystem ? { system: effectiveSystem } : {}),
     stopWhen: stepCountIs(10),
     tools: frontendTools(tools),
+    async onFinish({ text }) {
+      // Persist the exchange to DB for history-aware future queries
+      if (dealId && authToken && activeSessionId && userQueryText && text) {
+        await saveMessages(
+          dealId,
+          authToken,
+          activeSessionId,
+          userQueryText,
+          text,
+          ragSources,
+        )
+      }
+    },
   })
 
   return result.toUIMessageStreamResponse()

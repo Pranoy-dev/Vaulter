@@ -143,11 +143,14 @@ def search_chunks(
     results = []
     for row in rows:
         _id, doc_id, chunk_idx, content, metadata, score = row
+        meta = metadata or {}
         results.append({
             "content": content,
             "score": float(score),
-            "filename": (metadata or {}).get("filename"),
-            "category": (metadata or {}).get("category"),
+            "filename": meta.get("filename"),
+            "category": meta.get("category"),
+            "title": meta.get("title", ""),
+            "topic": meta.get("topic", ""),
             "chunk_index": chunk_idx,
             "document_id": str(doc_id),
         })

@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.models.schemas import ApiResponse
-from app.routers import classifications, deals, processing, search, upload, webhooks
+from app.routers import classifications, chat, deals, processing, search, upload, webhooks
 from app.auth import get_current_user_id
 
 import logging
@@ -129,6 +129,7 @@ app.include_router(deals.router, prefix="/api/deals", tags=["deals"])
 app.include_router(upload.router, prefix="/api/deals", tags=["upload"])
 app.include_router(processing.router, prefix="/api/deals", tags=["processing"])
 app.include_router(search.router, prefix="/api/deals", tags=["search"])
+app.include_router(chat.router, prefix="/api/deals", tags=["chat"])
 app.include_router(classifications.router, prefix="/api/classifications", tags=["classifications"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 

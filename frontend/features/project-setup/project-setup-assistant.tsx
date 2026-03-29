@@ -2,7 +2,7 @@
 
 import { Thread } from "@/components/assistant-ui/thread"
 import { AssistantRuntimeProvider } from "@assistant-ui/react"
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk"
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk"
 import { useAuth } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 import * as React from "react"
@@ -18,8 +18,10 @@ export function ProjectSetupAssistant({
   const { getToken } = useAuth()
   const [authToken, setAuthToken] = React.useState<string | null>(null)
 
+  // Generate a stable session UUID per mount — used for chat history continuity.
+  const [sessionId] = React.useState(() => crypto.randomUUID())
+
   // Refresh token once on mount then every 50 minutes (Clerk tokens live ~60 min).
-  // This keeps the token fresh for long-running sessions without requiring a page reload.
   React.useEffect(() => {
     const refresh = () => getToken().then((t) => setAuthToken(t ?? null))
     refresh()
@@ -27,13 +29,20 @@ export function ProjectSetupAssistant({
     return () => clearInterval(interval)
   }, [getToken])
 
-  const runtime = useChatRuntime({
-    api: "/api/chat",
-    body: {
-      ...(dealId ? { dealId } : {}),
-      ...(authToken ? { authToken } : {}),
-    },
-  })
+  const transport = React.useMemo(
+    () =>
+      new AssistantChatTransport({
+        api: "/api/chat",
+        body: {
+          ...(dealId ? { dealId } : {}),
+          ...(authToken ? { authToken } : {}),
+          ...(dealId ? { sessionId } : {}),
+        },
+      }),
+    [dealId, authToken, sessionId],
+  )
+
+  const runtime = useChatRuntime({ transport })
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
