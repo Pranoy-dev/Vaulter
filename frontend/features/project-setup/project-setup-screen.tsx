@@ -729,7 +729,7 @@ function FileStructurePanel({
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
                       <HoverTooltip content="Classification pending — this file has not been processed yet. Run the AI processing to classify it.">
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Pending</span>
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Classification Pending</span>
                       </HoverTooltip>
                     )}
                   </div>
@@ -1762,8 +1762,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                   onChange={onInputChange}
                 />
 
-                {/* Step 1: Loading state */}
-                {dealData.loading ? (
+                {/* Step 1: Loading state — skipped when dropzone is shown (new/empty project) */}
+                {dealData.loading && !showDropzone ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
                     <Loader2 className="size-5 animate-spin" />
                     <span>Loading files…</span>
@@ -2330,6 +2330,48 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                 <LeaseAmendmentPanel chains={dealData.leaseChains} loading={dealData.loading} />
               )
             ) : null}
+
+            {/* ── Section navigation footer ── */}
+            {(() => {
+              const hasDuplicates = dealData.duplicates.length > 0
+              let nextSec: SetupSection | null = null
+              let nextLabel = ""
+              let NextIcon: React.ElementType | null = null
+
+              if (section === "upload") {
+                if (dealData.documents.length === 0 || isUploading || dealData.loading) return null
+                nextSec = hasDuplicates ? "duplication" : "file-structure"
+                nextLabel = hasDuplicates ? "Duplication" : "Classification"
+                NextIcon = hasDuplicates ? Copy : LayoutGrid
+              } else if (section === "duplication") {
+                nextSec = "file-structure"
+                nextLabel = "Classification"
+                NextIcon = LayoutGrid
+              } else if (section === "file-structure") {
+                nextSec = "lease-amendment"
+                nextLabel = "Lease Amendment"
+                NextIcon = FilePenLine
+              } else if (section === "lease-amendment") {
+                nextSec = "ai-insights"
+                nextLabel = "AI Insights"
+                NextIcon = Sparkles
+              }
+              if (!nextSec || !NextIcon) return null
+              const dest = nextSec
+              return (
+                <div className="flex justify-end pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-xs"
+                    onClick={() => setSection(dest)}
+                  >
+                    Next: {nextLabel}
+                    <NextIcon className="size-3.5" />
+                  </Button>
+                </div>
+              )
+            })()}
 
           </div>
         </div>
