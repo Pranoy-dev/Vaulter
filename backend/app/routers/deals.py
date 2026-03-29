@@ -267,17 +267,30 @@ async def delete_deal(deal_id: uuid.UUID, clerk_user_id: str = Depends(get_curre
         _verify_deal_ownership(deal_id, user_id)
         sb = get_supabase()
 
-        # Delete all storage files under this deal's prefix
+        # Collect all storage paths from documents before deleting the deal row.
+        # (Storage paths are date-prefixed like YYYY/MM/{deal_id}/... so we can't
+        # reliably list them from Storage directly — fetch from DB instead.)
         try:
-            listed = sb.storage.from_("dataroom-files").list(str(deal_id))
-            if listed:
-                paths = [f"{deal_id}/{f['name']}" for f in listed if f.get("name")]
-                if paths:
-                    sb.storage.from_("dataroom-files").remove(paths)
+            doc_rows = (
+                sb.table("documents")
+                .select("storage_path")
+                .eq("deal_id", str(deal_id))
+                .not_.is_("storage_path", "null")
+                .execute()
+            ).data or []
+            paths = [r["storage_path"] for r in doc_rows if r.get("storage_path")]
+            if paths:
+                # Supabase Storage remove accepts up to 1000 paths per call
+                for i in range(0, len(paths), 1000):
+                    sb.storage.from_("dataroom-files").remove(paths[i : i + 1000])
         except Exception:
             pass  # Storage cleanup is best-effort; DB delete still proceeds
 
-        # Delete the deal row — cascades to documents, duplicates, lease chains, etc.
+        # Delete the deal row — cascades to:
+        #   documents → document_chunks (embeddings live here) → (gone)
+        #   document_chunks via deal_id FK → (gone)
+        #   chat_sessions → chat_messages → (gone)
+        #   duplicate_groups, lease_chains, processing_job → (gone)
         sb.table("deals").delete().eq("id", str(deal_id)).execute()
 
         return ApiResponse.ok({"deleted": str(deal_id)})
@@ -304,6 +317,7 @@ async def delete_document(
         if not doc.data:
             raise HTTPException(status_code=404, detail="Document not found")
 
+        # Delete storage file
         storage_path = doc.data[0].get("storage_path")
         if storage_path:
             try:
@@ -311,6 +325,12 @@ async def delete_document(
             except Exception:
                 pass  # Best-effort; DB delete still proceeds
 
+        # Explicitly delete chunks + embeddings before the document row.
+        # FK cascade handles this, but being explicit ensures it works even
+        # if RLS policies on document_chunks interfere with the cascade.
+        sb.table("document_chunks").delete().eq("document_id", str(doc_id)).execute()
+
+        # Delete the document row — cascades to extraction_segments etc.
         sb.table("documents").delete().eq("id", str(doc_id)).execute()
         return ApiResponse.ok({"deleted": str(doc_id)})
     except HTTPException:
