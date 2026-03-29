@@ -182,15 +182,33 @@ function StatusChatLog({
       icon: <FileIcon className="size-3.5 opacity-50" />,
       accent: "border-transparent",
     })
-    // Show the file currently in progress
-    const current = fileEntries.find((f) => f.progress > 0 && f.progress < 1)
-    if (current) {
+    // Show all in-progress files with folder + filename
+    const inProgress = fileEntries.filter((f) => f.progress > 0 && f.progress < 1)
+    inProgress.forEach((f) => {
+      const { folders, filename } = splitPath(f.relativePath)
+      if (folders.length > 0) {
+        entries.push({
+          key: `upload-cur-folder-${f.relativePath}`,
+          text: `📁 ${folders.join(" / ")}`,
+          icon: <FileIcon className="size-3.5 opacity-30" />,
+          accent: "border-transparent",
+        })
+      }
+      entries.push({
+        key: `upload-cur-file-${f.relativePath}`,
+        text: `↳ ${filename} (${Math.round(f.progress * 100)}%)`,
+        icon: <Loader2 className="size-3.5 animate-spin opacity-60" />,
+        accent: "border-transparent",
+      })
+    })
+    // Show the most recently completed file
+    const justDone = fileEntries.filter((f) => f.progress >= 1).slice(-1)[0]
+    if (justDone && inProgress.length === 0) {
       pushFilePath(
-        "upload-current",
-        current.relativePath,
-        <Loader2 className="size-3.5 animate-spin opacity-60" />,
+        "upload-last-done",
+        justDone.relativePath,
+        <CheckCircle2 className="size-3.5 text-green-500/60" />,
         "border-transparent",
-        `(${Math.round(current.progress * 100)}%)`,
       )
     }
   } else if (uploadProgress.state === "completing") {
