@@ -1383,9 +1383,9 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
         (!d.rag_indexed && d.processing_status !== "failed"),
     )
   // Only tick when the relevant tab is active AND processing is running
-  const isProcessingActive = processingJob.status === "running" || processingJob.status === "pending"
+  const isProcessingActive = processingJob.status === "running"
   const tabNeedsRefresh =
-    isProcessingActive &&
+    processingJob.status === "running" &&
     hasDocsNeedingWork &&
     (section === "upload" || section === "file-structure")
   // Keep a stable ref to silentRefresh so the interval closure never goes stale

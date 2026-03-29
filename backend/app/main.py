@@ -44,9 +44,11 @@ def _check_db() -> bool:
 
 
 def _recover_stuck_jobs() -> None:
-    """On startup, any job left in 'running' state was interrupted by a server restart.
-    If all its documents are done (completed/failed), mark the job completed.
-    Otherwise mark it failed so the user can re-trigger it."""
+    """On startup, reset any job left in a non-terminal in-flight state.
+    - 'running' → all docs done? mark completed. else mark failed.
+    - 'pending'  → reset to pending (already fine to re-trigger, no action needed
+                   UNLESS it was left from a previous crashed init — just leave it).
+    """
     from datetime import datetime, timezone
     try:
         sb = get_supabase()

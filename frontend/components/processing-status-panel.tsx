@@ -158,7 +158,7 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
   // Don't render anything until a real job exists
   if (job.status === null) return null
 
-  const isActive = job.status === "running" || job.status === "pending"
+  const isActive = job.status === "running"
   const hasError = job.status === "failed"
 
   return (
