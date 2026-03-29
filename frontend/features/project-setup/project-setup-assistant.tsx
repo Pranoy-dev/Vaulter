@@ -18,9 +18,13 @@ export function ProjectSetupAssistant({
   const { getToken } = useAuth()
   const [authToken, setAuthToken] = React.useState<string | null>(null)
 
-  // Refresh token once on mount (token is short-lived but valid long enough for a session)
+  // Refresh token once on mount then every 50 minutes (Clerk tokens live ~60 min).
+  // This keeps the token fresh for long-running sessions without requiring a page reload.
   React.useEffect(() => {
-    getToken().then((t) => setAuthToken(t ?? null))
+    const refresh = () => getToken().then((t) => setAuthToken(t ?? null))
+    refresh()
+    const interval = setInterval(refresh, 50 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [getToken])
 
   const runtime = useChatRuntime({
