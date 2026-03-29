@@ -10,6 +10,7 @@ Flow
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import mimetypes
 import os
@@ -324,6 +325,14 @@ async def upload_complete(
 
         # Clean up temp chunks
         cleanup_session(str(deal_id), session_id)
+
+        # Run hash-based duplicate detection immediately — hashes are already
+        # in the DB so this is fast and requires no AI/text extraction.
+        try:
+            from app.services.duplicate_detection import detect_hash_duplicates
+            await asyncio.to_thread(detect_hash_duplicates, str(deal_id))
+        except Exception as dup_exc:
+            logger.warning("Hash duplicate detection failed after upload: %s", dup_exc)
 
         return ApiResponse.ok(
             UploadCompleteResponse(

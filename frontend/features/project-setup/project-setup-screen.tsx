@@ -172,7 +172,7 @@ function StatusChatLog({
     const doneCount = fileEntries.filter((f) => f.progress >= 1).length
     entries.push({
       key: "upload-progress",
-      text: `Uploading files — ${uploadProgress.overall}%`,
+      text: `Uploading files — ${Math.round(uploadProgress.overall * 100)}%`,
       icon: <Loader2 className="size-3.5 animate-spin" />,
       accent: "border-blue-500/50",
     })
@@ -701,8 +701,8 @@ function TreeNodeRow({
                     ) : doc.processing_status === "completed" ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
-                      <HoverTooltip content="Classification pending — this file has not been processed yet. Run the AI processing to classify it.">
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Pending</span>
+                      <HoverTooltip content="Unclassified — this file has not been processed yet. Run the AI processing to classify it.">
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Unclassified</span>
                       </HoverTooltip>
                     )}
                   </div>
@@ -1056,8 +1056,8 @@ function FileStructurePanel({
                     ) : doc.processing_status === "completed" ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">Unclassified</span>
                     ) : (
-                      <HoverTooltip content="Classification pending — this file has not been processed yet. Run the AI processing to classify it.">
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Classification Pending</span>
+                      <HoverTooltip content="Unclassified — this file has not been processed yet. Run the AI processing to classify it.">
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 cursor-default">Unclassified</span>
                       </HoverTooltip>
                     )}
                   </div>
