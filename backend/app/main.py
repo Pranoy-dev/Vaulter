@@ -43,6 +43,40 @@ def _check_db() -> bool:
         return False
 
 
+def _recover_stuck_jobs() -> None:
+    """On startup, any job left in 'running' state was interrupted by a server restart.
+    If all its documents are done (completed/failed), mark the job completed.
+    Otherwise mark it failed so the user can re-trigger it."""
+    from datetime import datetime, timezone
+    try:
+        sb = get_supabase()
+        stuck = sb.table("processing_jobs").select("id,deal_id").eq("status", "running").execute()
+        if not stuck.data:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        for job in stuck.data:
+            docs = sb.table("documents").select("processing_status").eq("deal_id", job["deal_id"]).execute()
+            statuses = {d["processing_status"] for d in (docs.data or [])}
+            all_done = not (statuses - {"completed", "failed", None})
+            if all_done:
+                sb.table("processing_jobs").update({
+                    "status": "completed",
+                    "current_stage": "done",
+                    "progress": 1.0,
+                    "completed_at": now,
+                }).eq("id", job["id"]).execute()
+                logger.info("Recovered stuck job %s → completed", job["id"])
+            else:
+                sb.table("processing_jobs").update({
+                    "status": "failed",
+                    "error_message": "Server restarted during processing. Please re-run.",
+                    "completed_at": now,
+                }).eq("id", job["id"]).execute()
+                logger.info("Recovered stuck job %s → failed (docs not all done)", job["id"])
+    except Exception as exc:
+        logger.warning("Job recovery failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup — verify DB is reachable
@@ -50,6 +84,7 @@ async def lifespan(app: FastAPI):
         logger.critical("Cannot connect to database. Shutting down.")
         raise RuntimeError("Database is unreachable — check DATABASE_URL and Supabase status.")
     logger.info("Database connection verified.")
+    _recover_stuck_jobs()
     yield
     # Shutdown
 

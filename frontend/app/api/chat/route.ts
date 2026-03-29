@@ -89,6 +89,10 @@ async function saveMessages(
 export const maxDuration = 30
 
 export async function POST(req: Request) {
+  // Extract the Clerk JWT from the incoming Authorization header.
+  // AssistantChatTransport sends a fresh token on every request — no stale state.
+  const authToken = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? ""
+
   const body = await req.json()
   const messages = body.messages as UIMessage[]
   const system = body.system as string | undefined
@@ -97,7 +101,6 @@ export async function POST(req: Request) {
     { description?: string; parameters: JSONSchema7 }
   >
   const dealId: string | undefined = body.dealId
-  const authToken: string | undefined = body.authToken
   const sessionId: string | undefined = body.sessionId
 
   // Extract the latest user message text for RAG retrieval
@@ -129,11 +132,8 @@ export async function POST(req: Request) {
           "No indexed document data was found for this deal. The files in this data room have not been processed for RAG yet. " +
           "Let the user know that no document data is available and suggest they run AI processing first."
       }
+      // reason === "error": backend unreachable — answer without RAG, no notice
     }
-  } else if (dealId && !authToken) {
-    ragNotice =
-      "The user's session token is missing. Document search is unavailable. " +
-      "Ask the user to refresh the page."
   }
 
   // Prepend RAG context or notice to the system prompt, plus a hard deal-scope instruction

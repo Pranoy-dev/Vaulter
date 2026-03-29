@@ -27,6 +27,7 @@ import {
   ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
+  Loader2Icon,
   MoreHorizontalIcon,
   PencilIcon,
   RefreshCwIcon,
@@ -56,6 +57,15 @@ export const Thread: FC<{ chatPrepend?: ReactNode }> = ({ chatPrepend }) => {
         <ThreadPrimitive.Messages>
           {() => <ThreadMessage />}
         </ThreadPrimitive.Messages>
+
+        <AuiIf condition={(s) => s.thread.isRunning}>
+          <div className="mx-auto w-full max-w-(--thread-max-width) px-2 pb-2">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+              <Loader2Icon className="h-3.5 w-3.5 animate-spin" />
+              <span>Thinking…</span>
+            </div>
+          </div>
+        </AuiIf>
 
         <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 z-10 mx-auto mt-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-4 overflow-visible rounded-t-(--composer-radius) border-border/40 border-t bg-muted/20 pb-4 backdrop-blur-md md:pb-6 dark:border-white/[0.07] dark:bg-muted/25">
           <ThreadScrollToBottom />

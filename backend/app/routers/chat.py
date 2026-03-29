@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user_id
@@ -65,12 +65,13 @@ async def chat_context(
 async def save_chat_messages(
     deal_id: uuid.UUID,
     body: SaveMessagesRequest,
+    background_tasks: BackgroundTasks,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
     """Persist a user+assistant message pair after streaming completes.
 
     Creates a session on-the-fly if session_id is not provided.
-    Sets the session title from the first user message.
+    Triggers AI title generation (background) after the 1st and 5th exchanges.
     """
     user_id = _resolve_user_id(clerk_user_id)
     _verify_deal_ownership(deal_id, user_id)
@@ -78,13 +79,13 @@ async def save_chat_messages(
     from app.services.chat_engine import (
         get_or_create_session,
         save_message,
-        set_session_title,
+        maybe_update_title,
     )
     from app.db.client import get_supabase
 
     sid = get_or_create_session(str(deal_id), str(user_id), body.session_id)
 
-    # Check if session is new (no messages yet) → set title from first user msg
+    # Snapshot message count BEFORE saving this pair
     sb = get_supabase()
     msg_count = (
         sb.table("chat_messages")
@@ -92,17 +93,15 @@ async def save_chat_messages(
         .eq("session_id", sid)
         .execute()
     )
-    is_new = (msg_count.count or 0) == 0
+    count_before = msg_count.count or 0
 
     # Save user message
     save_message(sid, "user", body.user_message)
     # Save assistant message with sources
     save_message(sid, "assistant", body.assistant_message, body.sources)
 
-    # Title from first user message (truncated)
-    if is_new:
-        title = body.user_message[:200].strip()
-        set_session_title(sid, title)
+    # Generate/refresh title in the background (non-blocking)
+    background_tasks.add_task(maybe_update_title, sid, count_before)
 
     return ApiResponse.ok({"session_id": sid})
 
@@ -136,3 +135,34 @@ async def get_chat_messages(
 
     messages = get_session_messages(str(session_id), str(deal_id), str(user_id))
     return ApiResponse.ok(messages)
+
+
+@router.delete("/{deal_id}/chat/sessions/{session_id}")
+async def delete_chat_session(
+    deal_id: uuid.UUID,
+    session_id: uuid.UUID,
+    clerk_user_id: str = Depends(get_current_user_id),
+):
+    """Delete a chat session and all its messages."""
+    user_id = _resolve_user_id(clerk_user_id)
+    _verify_deal_ownership(deal_id, user_id)
+
+    from app.db.client import get_supabase
+
+    sb = get_supabase()
+    # Verify ownership before deleting
+    existing = (
+        sb.table("chat_sessions")
+        .select("id")
+        .eq("id", str(session_id))
+        .eq("deal_id", str(deal_id))
+        .eq("user_id", str(user_id))
+        .execute()
+    )
+    if not existing.data:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    # Messages cascade via FK
+    sb.table("chat_sessions").delete().eq("id", str(session_id)).execute()
+    return ApiResponse.ok({"deleted": str(session_id)})

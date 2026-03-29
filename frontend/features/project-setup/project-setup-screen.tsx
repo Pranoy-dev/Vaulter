@@ -991,6 +991,7 @@ function ClassificationPanel({
   dealId,
   onProcessed,
   isDocProcessing,
+  isProcessingActive,
   countdown,
   needsRefresh,
 }: {
@@ -1001,6 +1002,7 @@ function ClassificationPanel({
   dealId: string | null
   onProcessed: () => void
   isDocProcessing: boolean
+  isProcessingActive: boolean
   countdown: number
   needsRefresh: boolean
 }) {
@@ -1125,7 +1127,7 @@ function ClassificationPanel({
               variant={hasUnprocessed ? "default" : "outline"}
               className="h-8 gap-1.5 text-xs"
               onClick={handleProcess}
-              disabled={processing || isDocProcessing || documents.length === 0 || classifications.length === 0}
+              disabled={processing || isProcessingActive || documents.length === 0 || classifications.length === 0}
             >
               {processing || isDocProcessing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
               {processing ? "Starting…" : isDocProcessing ? "Processing…" : "Process"}
@@ -1389,6 +1391,15 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
   // Keep a stable ref to silentRefresh so the interval closure never goes stale
   const silentRefreshRef = React.useRef(dealData.silentRefresh)
   React.useEffect(() => { silentRefreshRef.current = dealData.silentRefresh }, [dealData.silentRefresh])
+
+  // Refresh document list when processing transitions to completed
+  const prevProcessingStatus = React.useRef(processingJob.status)
+  React.useEffect(() => {
+    if (prevProcessingStatus.current === "running" && processingJob.status === "completed") {
+      silentRefreshRef.current()
+    }
+    prevProcessingStatus.current = processingJob.status
+  }, [processingJob.status])
   const REFRESH_INTERVAL = 15
   React.useEffect(() => {
     if (!tabNeedsRefresh) {
@@ -2284,6 +2295,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                       processingJob.status === "running" &&
                       processingJob.currentStage === "document_processing"
                     }
+                    isProcessingActive={isProcessingActive}
                     countdown={refreshCountdown}
                     needsRefresh={tabNeedsRefresh}
                   />
