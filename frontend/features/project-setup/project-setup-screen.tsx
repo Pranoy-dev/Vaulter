@@ -69,7 +69,7 @@ import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-
 import { useClassifications } from "@/hooks/use-classifications"
 import type { Classification } from "@/hooks/use-classifications"
 import { useProcessingStatus, stageStatus } from "@/hooks/use-processing-status"
-import type { ProcessingJobState } from "@/hooks/use-processing-status"
+import type { ProcessingJobState, ProcessingStage } from "@/hooks/use-processing-status"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 export type SetupSection =
@@ -466,11 +466,11 @@ function StatusChatLog({
         }
       }
     } else if (stage === "detecting_duplicates") {
-      entries.push({ key: "proc-dup", text: `Comparing document content for duplicates… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-dup", text: `Checking for content duplicates… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-violet-500/50" })
     } else if (stage === "linking_documents") {
-      entries.push({ key: "proc-lease", text: `Building lease amendment chains… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-lease", text: `Generating lease amendment chains… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-pink-500/50" })
     } else if (stage === "building_overview") {
-      entries.push({ key: "proc-overview", text: `Computing summaries and statistics… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
+      entries.push({ key: "proc-overview", text: `Building AI insights… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-emerald-500/50" })
     } else {
       entries.push({ key: "proc-running", text: `Processing… (${pct}%)`, icon: <Loader2 className="size-3.5 animate-spin" />, accent: "border-blue-500/50" })
     }
@@ -768,45 +768,58 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
       <div className={`rounded-xl border border-border/70 ${RISK_BG_COLORS[insights.risk_band.color] ?? RISK_BG_COLORS.amber} p-4`}>
         <div className="flex items-center gap-4">
           {/* Score ring */}
-          <div className="relative flex shrink-0 items-center justify-center">
-            <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
-              <circle cx="48" cy="48" r={radius} fill="none" stroke="currentColor" strokeWidth="6" className="text-black/5 dark:text-white/10" />
-              <circle
-                cx="48" cy="48" r={radius} fill="none"
-                strokeWidth="6" strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={offset}
-                className={`transition-all duration-700 ease-out ${RISK_RING_COLORS[insights.risk_band.color] ?? RISK_RING_COLORS.amber}`}
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-2xl font-bold tabular-nums ${RISK_COLORS[insights.risk_band.color] ?? RISK_COLORS.amber}`}>
-                {Math.round(insights.risk_score)}
-              </span>
-              <span className="text-[10px] text-muted-foreground">/100</span>
+          <HoverTooltip content="Deal Risk Score (0–100). Higher = safer deal. Scored across completeness, lease risk, and financial risk dimensions.">
+            <div className="relative flex shrink-0 cursor-help items-center justify-center">
+              <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+                <circle cx="48" cy="48" r={radius} fill="none" stroke="currentColor" strokeWidth="6" className="text-black/5 dark:text-white/10" />
+                <circle
+                  cx="48" cy="48" r={radius} fill="none"
+                  strokeWidth="6" strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={offset}
+                  className={`transition-all duration-700 ease-out ${RISK_RING_COLORS[insights.risk_band.color] ?? RISK_RING_COLORS.amber}`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className={`text-2xl font-bold tabular-nums ${RISK_COLORS[insights.risk_band.color] ?? RISK_COLORS.amber}`}>
+                  {Math.round(insights.risk_score)}
+                </span>
+                <span className="text-[10px] text-muted-foreground">/100</span>
+              </div>
             </div>
-          </div>
+          </HoverTooltip>
           {/* Label + dimensions */}
           <div className="min-w-0 flex-1">
-            <p className={`text-sm font-semibold ${RISK_COLORS[insights.risk_band.color] ?? ""}`}>
-              {insights.risk_band.label}
-            </p>
+            <HoverTooltip content={`Risk band: ${insights.risk_band.label}. Bands are Low (75–100), Medium (50–74), High (25–49), Critical (0–24).`}>
+              <p className={`inline-flex cursor-help items-center gap-1 text-sm font-semibold ${RISK_COLORS[insights.risk_band.color] ?? ""}`}>
+                {insights.risk_band.label}
+              </p>
+            </HoverTooltip>
             <p className="mt-0.5 text-[11px] text-muted-foreground">Deal Risk Score</p>
             <div className="mt-2 space-y-1">
-              {Object.values(insights.dimensions).map((dim) => (
-                <div key={dim.label} className="flex items-center gap-2">
-                  <span className="w-24 truncate text-[11px] text-muted-foreground">{dim.label}</span>
-                  <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        dim.score >= 75 ? "bg-green-500" : dim.score >= 50 ? "bg-amber-500" : dim.score >= 25 ? "bg-orange-500" : "bg-red-500"
-                      }`}
-                      style={{ width: `${dim.score}%` }}
-                    />
+              {Object.values(insights.dimensions).map((dim) => {
+                const DIM_TOOLTIPS: Record<string, string> = {
+                  "Completeness": "How complete the documentation pack is. Missing critical documents lower this score.",
+                  "Lease Risk": "Lease-level risk based on WAULT, expiry concentration, and tenant diversification.",
+                  "Financial Risk": "Financial documentation coverage — rent schedules, accounts, and financial statements.",
+                }
+                return (
+                  <div key={dim.label} className="flex items-center gap-2">
+                    <HoverTooltip content={DIM_TOOLTIPS[dim.label] ?? `${dim.label} sub-score (0–100). Higher is better.`}>
+                      <span className="w-24 cursor-help truncate text-[11px] text-muted-foreground">{dim.label}</span>
+                    </HoverTooltip>
+                    <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          dim.score >= 75 ? "bg-green-500" : dim.score >= 50 ? "bg-amber-500" : dim.score >= 25 ? "bg-orange-500" : "bg-red-500"
+                        }`}
+                        style={{ width: `${dim.score}%` }}
+                      />
+                    </div>
+                    <span className="w-8 text-right text-[11px] font-medium tabular-nums">{Math.round(dim.score)}</span>
                   </div>
-                  <span className="w-8 text-right text-[11px] font-medium tabular-nums">{Math.round(dim.score)}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
@@ -814,57 +827,67 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
 
       {/* ── WAULT & Key Metrics ── */}
       {(insights.wault !== null || insights.key_metrics.length > 0) && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid lg:grid-cols-5">
           {insights.wault !== null && (
-            <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-              <div className="flex items-center gap-1.5">
-                <Clock className="size-3.5 text-muted-foreground/60" />
-                <p className="text-[11px] text-muted-foreground">WAULT</p>
+            <HoverTooltip content="WAULT = Weighted Average Unexpired Lease Term. The average time (in years) remaining across all leases, weighted by count. ≥7 yrs = low risk · 3–7 yrs = medium · <3 yrs = high risk.">
+              <div className="cursor-help rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 text-center">
+                <div className="flex items-center justify-center gap-1.5">
+                  <Clock className="size-3.5 text-muted-foreground/60" />
+                  <p className="text-[11px] text-muted-foreground">WAULT</p>
+                </div>
+                <p className={`mt-0.5 text-lg font-semibold tabular-nums ${
+                  insights.wault >= 7 ? "text-green-600 dark:text-green-400" :
+                  insights.wault >= 3 ? "text-amber-600 dark:text-amber-400" :
+                  "text-red-600 dark:text-red-400"
+                }`}>
+                  {insights.wault.toFixed(1)}<span className="text-xs font-normal text-muted-foreground"> yr</span>
+                </p>
               </div>
-              <p className={`mt-0.5 text-lg font-semibold tabular-nums ${
-                insights.wault >= 7 ? "text-green-600 dark:text-green-400" :
-                insights.wault >= 3 ? "text-amber-600 dark:text-amber-400" :
-                "text-red-600 dark:text-red-400"
-              }`}>
-                {insights.wault.toFixed(1)}<span className="text-xs font-normal text-muted-foreground"> yr</span>
+            </HoverTooltip>
+          )}
+          <HoverTooltip content="Number of documents successfully processed by AI out of the total uploaded. Unprocessed documents are not included in risk scoring.">
+            <div className="cursor-help rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 text-center">
+              <div className="flex items-center justify-center gap-1.5">
+                <Files className="size-3.5 text-muted-foreground/60" />
+                <p className="text-[11px] text-muted-foreground">Documents</p>
+              </div>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums">
+                {insights.processed_documents}<span className="text-xs font-normal text-muted-foreground">/{insights.total_documents}</span>
               </p>
             </div>
-          )}
-          <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-            <div className="flex items-center gap-1.5">
-              <Files className="size-3.5 text-muted-foreground/60" />
-              <p className="text-[11px] text-muted-foreground">Documents</p>
-            </div>
-            <p className="mt-0.5 text-lg font-semibold tabular-nums">
-              {insights.processed_documents}<span className="text-xs font-normal text-muted-foreground">/{insights.total_documents}</span>
-            </p>
-          </div>
+          </HoverTooltip>
           {insights.key_metrics.filter((m) => m.label === "Tenants Identified").map((m) => (
-            <div key={m.label} className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-              <div className="flex items-center gap-1.5">
-                <Users className="size-3.5 text-muted-foreground/60" />
-                <p className="text-[11px] text-muted-foreground">{m.label}</p>
+            <HoverTooltip key={m.label} content="Unique tenant / counterparty names found across all lease documents in this data room.">
+              <div className="cursor-help rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 text-center">
+                <div className="flex items-center justify-center gap-1.5">
+                  <Users className="size-3.5 text-muted-foreground/60" />
+                  <p className="text-[11px] text-muted-foreground">{m.label}</p>
+                </div>
+                <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
               </div>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
-            </div>
+            </HoverTooltip>
           ))}
           {insights.key_metrics.filter((m) => m.label === "Signed Documents").map((m) => (
-            <div key={m.label} className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-              <div className="flex items-center gap-1.5">
-                <Shield className="size-3.5 text-muted-foreground/60" />
-                <p className="text-[11px] text-muted-foreground">Signed</p>
+            <HoverTooltip key={m.label} content="Documents that contain a detected signature or seal — indicating executed / legally binding status.">
+              <div className="cursor-help rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 text-center">
+                <div className="flex items-center justify-center gap-1.5">
+                  <Shield className="size-3.5 text-muted-foreground/60" />
+                  <p className="text-[11px] text-muted-foreground">Signed</p>
+                </div>
+                <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
               </div>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
-            </div>
+            </HoverTooltip>
           ))}
           {insights.key_metrics.filter((m) => m.label === "With Expiry Dates").map((m) => (
-            <div key={m.label} className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
-              <div className="flex items-center gap-1.5">
-                <Clock className="size-3.5 text-muted-foreground/60" />
-                <p className="text-[11px] text-muted-foreground">With Expiry</p>
+            <HoverTooltip key={m.label} content="Lease and amendment documents where an expiry or break date was successfully extracted. Used to build the expiry timeline below.">
+              <div className="cursor-help rounded-xl border border-border/70 bg-background/80 px-3 py-2.5 text-center">
+                <div className="flex items-center justify-center gap-1.5">
+                  <Clock className="size-3.5 text-muted-foreground/60" />
+                  <p className="text-[11px] text-muted-foreground">With Expiry</p>
+                </div>
+                <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
               </div>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
-            </div>
+            </HoverTooltip>
           ))}
         </div>
       )}
@@ -872,6 +895,9 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
       {/* ── Circuit Breakers ── */}
       {insights.circuit_breakers.length > 0 && (
         <div className="space-y-1">
+          <HoverTooltip content="Circuit breakers are critical deal-level flags that significantly cap the risk score regardless of other factors. They indicate issues that must be addressed before proceeding.">
+            <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400">Circuit Breakers</p>
+          </HoverTooltip>
           {insights.circuit_breakers.map((b, i) => (
             <div key={i} className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/30">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
@@ -884,7 +910,9 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
       {/* ── Key Risk Drivers ── */}
       {insights.risk_drivers.length > 0 && (
         <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Key risk signals</p>
+          <HoverTooltip content="Individual factors that raised or lowered the risk score. Severity: Critical (red) · Warning (amber) · Info (blue) · Positive (green).">
+            <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">Key risk signals</p>
+          </HoverTooltip>
           {insights.risk_drivers.map((d, i) => {
             const sev = SEVERITY_ICONS[d.severity] ?? SEVERITY_ICONS.info
             const SevIcon = sev.icon
@@ -901,7 +929,9 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
       {/* ── What's Missing Checklist ── */}
       {insights.missing_items.length > 0 && (
         <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">What&apos;s missing</p>
+          <HoverTooltip content="Documents expected in a typical data room that are absent or incomplete. Tier 1 Critical = essential legal/financial docs · Tier 2 Important = strongly recommended · Tier 3 Standard = best practice.">
+            <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">What&apos;s missing</p>
+          </HoverTooltip>
           {insights.missing_items.map((m, i) => {
             const tierColors: Record<number, string> = {
               1: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
@@ -909,11 +939,18 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
               3: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
             }
             const tierLabels: Record<number, string> = { 1: "Critical", 2: "Important", 3: "Standard" }
+            const tierTooltips: Record<number, string> = {
+              1: "Tier 1 — Critical: absence of this document materially increases deal risk.",
+              2: "Tier 2 — Important: strongly recommended for a complete data room.",
+              3: "Tier 3 — Standard: best-practice inclusion; lower impact if missing.",
+            }
             return (
               <div key={i} className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
-                <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${tierColors[m.tier] ?? tierColors[3]}`}>
-                  {tierLabels[m.tier] ?? "Info"}
-                </span>
+                <HoverTooltip content={tierTooltips[m.tier] ?? "Missing document item."}>
+                  <span className={`mt-0.5 cursor-help shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${tierColors[m.tier] ?? tierColors[3]}`}>
+                    {tierLabels[m.tier] ?? "Info"}
+                  </span>
+                </HoverTooltip>
                 <p className="text-xs text-muted-foreground">{m.message}</p>
               </div>
             )
@@ -924,7 +961,9 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
       {/* ── Lease Expiry Timeline ── */}
       {insights.expiry_timeline.length > 0 && insights.expiry_timeline.some((b) => b.count > 0) && (
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">Lease expiry timeline</p>
+          <HoverTooltip content="Shows the % of leases expiring in each year range from today. The red vertical line at 20% marks the concentration risk threshold — any year bucket exceeding 20% is highlighted as a risk.">
+            <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">Lease expiry timeline</p>
+          </HoverTooltip>
           <div className="rounded-xl border border-border/60 bg-background/60 p-3">
             <div className="space-y-1.5">
               {insights.expiry_timeline.map((bucket) => {
@@ -1935,6 +1974,8 @@ function ClassificationPanel({
   onProcessed,
   isDocProcessing,
   isProcessingActive,
+  processingStage,
+  processingProgress,
   countdown,
   needsRefresh,
 }: {
@@ -1946,6 +1987,8 @@ function ClassificationPanel({
   onProcessed: () => void
   isDocProcessing: boolean
   isProcessingActive: boolean
+  processingStage: ProcessingStage
+  processingProgress: number
   countdown: number
   needsRefresh: boolean
 }) {
@@ -1972,13 +2015,18 @@ function ClassificationPanel({
       }
       toast.success("Processing started", { description: "Per-file progress is visible in the file list below." })
       onProcessed()
+      // Keep processing=true until isProcessingActive arrives — cleared by useEffect below
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Network error — is the backend running?"
       toast.error("Failed to start processing", { description: msg })
-    } finally {
       setProcessing(false)
     }
   }, [dealId, getToken, onProcessed])
+
+  // Clear local "processing" state as soon as the job is actually running (bridges API→socket gap)
+  React.useEffect(() => {
+    if (isProcessingActive && processing) setProcessing(false)
+  }, [isProcessingActive, processing])
 
   const handleProcess = React.useCallback(() => {
     if (duplicates.length > 0) {
@@ -2104,9 +2152,9 @@ function ClassificationPanel({
               onClick={handleProcess}
               disabled={processing || isProcessingActive || documents.length === 0 || classifications.length === 0}
             >
-              {processing || isDocProcessing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {processing ? "Starting…" : isDocProcessing ? "Processing…" : "Process"}
-              {!processing && !isDocProcessing && hasUnprocessed && (
+              {processing || isProcessingActive ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+              {processing ? "Starting…" : isProcessingActive ? "Processing…" : "Process"}
+              {!processing && !isProcessingActive && hasUnprocessed && (
                 <span className="ml-0.5 inline-flex items-center gap-1 font-semibold">
                   {unclassifiedCount > 0 && (
                     <span className="rounded bg-white/25 px-2 py-0.5 text-[10px] leading-none tabular-nums">
@@ -2122,25 +2170,39 @@ function ClassificationPanel({
               )}
             </Button>
           </div>
-          {/* Per-file processing progress bar */}
-          {isDocProcessing && (() => {
+          {/* Per-file processing progress bar — visible from button click until job completes */}
+          {(processing || isProcessingActive) && (() => {
             const processingCount = documents.filter((d) => d.processing_status === "processing").length
             const processedCount = documents.filter((d) => d.processing_status === "completed" || d.processing_status === "failed").length
-            const processPct = documents.length > 0 ? Math.round((processedCount / documents.length) * 100) : 0
+            const docPct = documents.length > 0 ? Math.round((processedCount / documents.length) * 100) : 0
+            const overallPct = Math.round(processingProgress * 100)
+            const stageLabel =
+              processing && !isProcessingActive ? "Starting processing…"
+              : processingStage === "indexing" ? "Indexing documents…"
+              : processingStage === "detecting_hash_duplicates" ? "Scanning for identical files…"
+              : processingStage === "document_processing"
+                ? (processingCount > 0 ? `AI Classification — ${processingCount} file${processingCount !== 1 ? "s" : ""} in progress` : "AI Classification in progress…")
+              : processingStage === "detecting_duplicates" ? "Checking for content duplicates…"
+              : processingStage === "linking_documents" ? "Generating lease amendment chains…"
+              : processingStage === "building_overview" ? "Building AI insights…"
+              : "Processing…"
+            const displayPct = processingStage === "document_processing" ? docPct : overallPct
+            const displayRight = processingStage === "document_processing"
+              ? `${processedCount}/${documents.length} (${docPct}%)`
+              : processing && !isProcessingActive ? null
+              : `${overallPct}%`
             return (
               <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5">
                     <Loader2 className="size-3.5 animate-spin text-primary" />
-                    <span className="text-[11px] font-medium text-primary">
-                      AI Processing{processingCount > 0 ? ` — ${processingCount} file${processingCount !== 1 ? "s" : ""} in progress` : "…"}
-                    </span>
+                    <span className="text-[11px] font-medium text-primary">{stageLabel}</span>
                   </div>
-                  <span className="text-[11px] font-semibold tabular-nums text-primary">
-                    {processedCount}/{documents.length} ({processPct}%)
-                  </span>
+                  {displayRight && (
+                    <span className="text-[11px] font-semibold tabular-nums text-primary">{displayRight}</span>
+                  )}
                 </div>
-                <Progress value={processPct} className="h-1.5" />
+                <Progress value={processing && !isProcessingActive ? 0 : displayPct} className="h-1.5" />
               </div>
             )
           })()}
@@ -2875,7 +2937,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
         {/* Chat panel — left side, collapsible */}
         {chatOpen ? (
           <Card
-            className="group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-border/50 md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)]"
+            className="group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-border/50 md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)] transition-[width] duration-300 ease-in-out"
             style={{ width: chatWidth }}
           >
             {/* Drag handle on the right border */}
@@ -2997,6 +3059,15 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                   >
                     <Sparkles aria-hidden />
                     AI Insights
+                    {processingJob.status === "running" && processingJob.currentStage === "building_overview" ? (
+                      <Loader2 className="ml-1 size-3 animate-spin text-primary/70" />
+                    ) : (dealData.insights as DealInsights | null) ? (
+                      <HoverTooltip content={`Deal Risk Score: ${Math.round((dealData.insights as DealInsights).risk_score)}/100. Higher = safer. Band: ${(dealData.insights as DealInsights).risk_band.label}.`}>
+                        <span className="ml-1 cursor-help rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-green-700 dark:bg-green-950/50 dark:text-green-400">
+                          {Math.round((dealData.insights as DealInsights).risk_score)}%
+                        </span>
+                      </HoverTooltip>
+                    ) : null}
                   </ToggleGroupItem>
                   <ToggleGroupItem
                     value="lease-amendment"
@@ -3005,12 +3076,21 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                   >
                     <FilePenLine aria-hidden />
                     Lease Amendment
+                    {processingJob.status === "running" && processingJob.currentStage === "linking_documents" ? (
+                      <Loader2 className="ml-1 size-3 animate-spin text-primary/70" />
+                    ) : dealData.leaseChains.length > 0 ? (
+                      <HoverTooltip content={`${dealData.leaseChains.length} lease chain${dealData.leaseChains.length !== 1 ? "s" : ""} detected. Each chain groups a base lease with its amendments and side letters by tenant.`}>
+                        <span className="ml-1 cursor-help rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
+                          {dealData.leaseChains.length}
+                        </span>
+                      </HoverTooltip>
+                    ) : null}
                   </ToggleGroupItem>
                 </>
               )}
             </ToggleGroup>
           </div>}
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg px-0.5 pt-1 pb-1 md:px-1">
+          <div key={section} className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg px-0.5 pt-1 pb-1 md:px-1 animate-in fade-in duration-150">
             {section === "upload" ? (
               <div className={showDropzone && selectedFiles.length === 0 && dealData.documents.length === 0 ? "flex flex-1 flex-col items-center justify-center" : "space-y-3"}>
                 <input
@@ -3569,6 +3649,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                       processingJob.currentStage === "document_processing"
                     }
                     isProcessingActive={isProcessingActive}
+                    processingStage={processingJob.currentStage}
+                    processingProgress={processingJob.progress}
                     countdown={refreshCountdown}
                     needsRefresh={tabNeedsRefresh}
                   />

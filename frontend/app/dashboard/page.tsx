@@ -555,7 +555,7 @@ export default function Page() {
       />
 
       {view === "project" && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden animate-in fade-in duration-200">
           <ProjectSetupScreen
             key={selectedDealId!}
             dealId={selectedDealId}
@@ -567,6 +567,7 @@ export default function Page() {
       )}
 
       {view === "new-project" && (
+        <div className="flex min-h-0 flex-1 flex-col animate-in fade-in duration-200">
         <NewProjectScreen
           onBack={goHome}
           onCreate={(dealId, title) => {
@@ -575,14 +576,17 @@ export default function Page() {
             router.push(`/dashboard?deal=${dealId}`)
           }}
         />
+        </div>
       )}
 
       {view === "home" && (
+        <div className="flex min-h-0 flex-1 flex-col animate-in fade-in duration-200">
         <ProjectsHome
           refreshKey={homeRefreshKey}
           onNewProject={() => router.push("/dashboard?new=1")}
           onOpenDeal={openDeal}
         />
+        </div>
       )}
     </div>
   )
