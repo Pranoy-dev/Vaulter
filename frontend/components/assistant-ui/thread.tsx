@@ -41,7 +41,7 @@ export const Thread: FC<{ chatPrepend?: ReactNode; disabled?: boolean }> = ({ ch
       className="aui-root aui-thread-root @container dark flex h-full min-h-0 flex-col bg-background"
       style={{
         ["--thread-max-width" as string]: "44rem",
-        ["--composer-radius" as string]: "24px",
+        ["--composer-radius" as string]: "12px",
         ["--composer-padding" as string]: "10px",
       }}
     >
@@ -71,7 +71,7 @@ export const Thread: FC<{ chatPrepend?: ReactNode; disabled?: boolean }> = ({ ch
           </AuiIf>
         )}
 
-        <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 z-10 mx-auto mt-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-4 overflow-visible rounded-t-(--composer-radius) border-border/40 border-t bg-muted/20 pb-4 backdrop-blur-md md:pb-6 dark:border-white/[0.07] dark:bg-muted/25">
+        <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 z-10 mx-auto mt-auto flex w-full max-w-(--thread-max-width) shrink-0 flex-col gap-4 overflow-visible rounded-t-(--composer-radius) border-border/40 border-t bg-background/80 pb-4 backdrop-blur-md md:pb-6 dark:border-white/[0.07] dark:bg-zinc-900/80">
           <ThreadScrollToBottom />
           {disabled ? (
             <div className="px-3 py-2 text-center text-xs text-muted-foreground/60">
@@ -114,12 +114,12 @@ const Composer: FC = () => {
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="composer-shell"
-          className="flex w-full flex-col gap-2 rounded-(--composer-radius) border border-border/55 bg-muted p-(--composer-padding) shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-[border-color,box-shadow] focus-within:border-ring/70 focus-within:ring-2 focus-within:ring-ring/25 dark:border-white/[0.1] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50"
+          className="flex w-full flex-col gap-2 rounded-(--composer-radius) border border-border/55 bg-background p-(--composer-padding) shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-[border-color,box-shadow] focus-within:border-ring/70 focus-within:ring-2 focus-within:ring-ring/25 dark:border-white/[0.14] dark:bg-zinc-800/80 dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] data-[dragging=true]:border-ring data-[dragging=true]:border-dashed data-[dragging=true]:bg-accent/50"
         >
           <ComposerAttachments />
           <ComposerPrimitive.Input
             placeholder="Send a message..."
-            className="aui-composer-input max-h-32 min-h-10 w-full resize-none bg-transparent px-1.75 py-1 text-sm outline-none placeholder:text-muted-foreground/80"
+            className="aui-composer-input max-h-32 min-h-10 w-full resize-none bg-transparent px-1.75 py-1 text-sm outline-none placeholder:text-muted-foreground/60 dark:placeholder:text-zinc-400/70 dark:text-zinc-100"
             rows={1}
             autoFocus
             aria-label="Message input"
