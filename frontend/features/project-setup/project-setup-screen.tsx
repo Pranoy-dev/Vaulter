@@ -2652,14 +2652,20 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
   const silentRefreshRef = React.useRef(dealData.silentRefresh)
   React.useEffect(() => { silentRefreshRef.current = dealData.silentRefresh }, [dealData.silentRefresh])
 
-  // Refresh document list when processing transitions to completed
+  // Refresh all data only when the full processing job completes
   const prevProcessingStatus = React.useRef(processingJob.status)
+  const prevProcessingStage = React.useRef(processingJob.currentStage)
   React.useEffect(() => {
-    if (prevProcessingStatus.current === "running" && processingJob.status === "completed") {
+    const wasRunning = prevProcessingStatus.current === "running"
+    const nowCompleted = processingJob.status === "completed"
+
+    if (wasRunning && nowCompleted) {
       silentRefreshRef.current()
     }
+
     prevProcessingStatus.current = processingJob.status
-  }, [processingJob.status])
+    prevProcessingStage.current = processingJob.currentStage
+  }, [processingJob.status, processingJob.currentStage])
   const REFRESH_INTERVAL = 15
   React.useEffect(() => {
     if (!tabNeedsRefresh) {
