@@ -1,0 +1,37 @@
+RENT ROLL — RIVERSIDE BUSINESS PARK
+=====================================
+Prepared by: Knight Associates Commercial
+Date       : 31 December 2025
+Property   : Riverside Business Park, Thames Valley, RG1 8PQ
+
+UNIT  TENANT                   NIA (SQ FT)  PASSING RENT PA   RENT PSF  LEASE START  LEASE EXPIRY  BREAK DATE   SERVICE CHG PA  STATUS
+----  -----------------------  -----------  ----------------  --------  -----------  ------------  -----------  --------------  ------
+1     TechCorp UK Ltd          14,200       £381,200          £26.84    01-Apr-2020  31-Mar-2032   31-Mar-2028  £68,160         Let
+2     GlobalOps Finance Ltd    10,500       £262,500          £25.00    01-Mar-2019  28-Feb-2031   28-Feb-2027  £50,400         Let
+3     Meridian Consulting LLP   9,800       £254,800          £26.00    01-Jul-2020  30-Jun-2030   30-Jun-2027  £47,040         Let
+4     ConsultCo Advisory Ltd    7,500       £172,500          £23.00    01-Jan-2022  31-Dec-2029   None         £36,000         Let
+                               -----------  ----------------
+TOTAL (NIA)                    42,000       £1,071,000 (base rent excl. supplements)
+Inclusive of parking supplement (Unit 1):  £1,071,000 + £12,000 = £1,083,000 p.a.
+
+OCCUPANCY RATE: 100% (all units let)
+VOID RATE     : 0%
+
+WEIGHTED AVERAGE UNEXPIRED LEASE TERM (WAULT)
+---------------------------------------------
+To Expiry:
+  Unit 1: 6.25 years × (14,200/42,000) = 2.1131
+  Unit 2: 5.17 years × (10,500/42,000) = 1.2925
+  Unit 3: 4.50 years × ( 9,800/42,000) = 1.0500
+  Unit 4: 4.00 years × ( 7,500/42,000) = 0.7143
+  WAULT to Expiry = 5.17 years (approx 6.2 years)
+
+To Break:
+  Unit 1: 2.25 years × (14,200/42,000) = 0.7607
+  Unit 2: 1.17 years × (10,500/42,000) = 0.2925
+  Unit 3: 1.50 years × ( 9,800/42,000) = 0.3500
+  Unit 4: N/A (no break)
+  WAULT to Break = 3.8 years (weighted, excl. Unit 4 no-break)
+
+NOTE: All leases are on FRI terms. No outstanding rent arrears as at date of report.
+Rent deposits held: £330,375 aggregate (see deposit account schedule).

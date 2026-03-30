@@ -1,0 +1,53 @@
+RENT ROLL — PARKWAY RETAIL CENTRE
+===================================
+Prepared by: Turnaround Advisory Partners LLP (Administrators)
+Date       : 28 February 2026
+Property   : Parkway Retail Centre, Stockport, SK1 3UA
+
+CURRENT OCCUPANCY STATUS
+--------------------------
+UNIT  TENANT                  NIA (SQ FT)  PASSING RENT PA   RENT PSF  LEASE START  LEASE EXPIRY  BREAK DATE  STATUS
+----  ----------------------  -----------  ----------------  --------  -----------  ------------  ----------  -------------------
+1     FashionZone Ltd (CVA)   14,000       £254,800 (CVA)    £18.20    01-Oct-2016  30-Sep-2026   NONE        Let — CVA reduced
+2     NewPrint Ltd             4,200       £ 46,200          £11.00    01-Jul-2023  30-Jun-2026   NONE        Let
+3     VOID                     7,800       £      0          £ 0.00    N/A          N/A           N/A         VOID (Dec 2025)
+4     VOID                     5,600       £      0          £ 0.00    N/A          N/A           N/A         VOID (Aug 2025)
+5     VOID                     2,400       £      0          £ 0.00    N/A          N/A           N/A         VOID (Mar 2025)
+
+TOTAL PASSING RENT (LET UNITS): £301,000 p.a.
+LET AREA                       : 18,200 sq ft
+VOID AREA                      : 15,800 sq ft
+TOTAL NIA                      : 34,000 sq ft
+OCCUPANCY                      : 53.5%
+VOID RATE                      : 46.5%
+
+WAULT (LET UNITS)
+-----------------
+To Expiry:
+  Unit 1: 0.58 yrs × (14,000/18,200) = 0.447
+  Unit 2: 0.33 yrs × ( 4,200/18,200) = 0.076
+  WAULT to Expiry = 0.52 years
+
+BOTH LEASES EXPIRE WITHIN 7 MONTHS. Property will be substantially void
+from July 2026 (NewPrint expiry) and entirely void from October 2026
+(FashionZone expiry) unless new lettings are secured.
+
+HISTORIC VACATED TENANTS (FOR REFERENCE)
+-----------------------------------------
+Unit 3: Footlocker Sports Ltd — lease expired 31 Dec 2025, no renewal.
+         Passing rent was £124,800 p.a. (£16.00/sq ft). No documentation
+         provided in data room for this lease.
+Unit 4: HomeStyle Ltd — forfeited following rent arrears Aug 2025.
+         Outstanding arrears: £48,200 (unsecured creditor claim filed).
+         Lease and forfeiture notice NOT in data room.
+Unit 5: CafeChain Ltd — surrendered by agreement Mar 2025.
+         Surrender deed NOT provided in data room.
+
+DATA ROOM MISSING ITEMS:
+  - Unit 3 lease (Footlocker Sports) — NOT AVAILABLE
+  - Unit 4 lease (HomeStyle) — NOT AVAILABLE
+  - Unit 5 lease (CafeChain) + surrender deed — NOT AVAILABLE
+  - Building survey — NOT COMMISSIONED
+  - Environmental report — NOT AVAILABLE
+  - Planning permission / consent history — NOT PROVIDED
+  - Insurance schedule (lapsed Feb 2026) — CRITICAL

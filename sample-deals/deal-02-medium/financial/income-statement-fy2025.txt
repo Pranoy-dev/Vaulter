@@ -1,0 +1,62 @@
+INCOME AND EXPENDITURE STATEMENT
+=================================
+Property    : Central Trade Estate, Birmingham, B26 3QR
+Owner       : Midlands Property Fund II LP
+Period      : 1 January 2025 – 31 December 2025
+Prepared by : Midlands Property Management Ltd
+
+NOTE: Unit C became void on 1 October 2025. Income from Unit C is
+reflected for nine months only (Jan–Sep 2025).
+
+INCOME
+------
+Unit A — Precision Manufacturing Ltd    £209,600
+Unit B — Apex Logistics Solutions Ltd   £158,200
+Unit C — Previous tenant (Jan–Sep 2025) £ 46,800 (9 months @ £62,400 p.a.)
+                                        --------
+Gross Rental Income                     £414,600
+
+Service Charge Recovered                £ 22,300 (let units, estate charge)
+
+TOTAL INCOME                            £436,900
+
+EXPENDITURE
+-----------
+Management Fee (1% GRI)                 £  4,146
+Insurance (all units incl. void)        £  9,200
+Repairs and Maintenance                 £ 18,400
+Rates on Void (Unit C, Oct–Dec 2025)    £  6,750 (3 months empty rates)
+Security and CCTV                       £  4,800
+Estate Cleaning and Grounds             £  5,600
+Letting Agent Fees (Unit C marketing)   £  3,500
+Professional Fees                       £  4,200
+Sundry                                  £  1,604
+                                        --------
+TOTAL EXPENDITURE                       £ 58,200
+
+NET OPERATING INCOME (NOI)              £355,600
+(= Gross Rental Income less Total Expenditure, full year basis annualised)
+Stabilised NOI (assuming Unit C let at ERV): £425,000 (estimated)
+
+DEBT SERVICE
+------------
+Senior Loan: £2,800,000 @ 5.10% variable (SONIA + 2.5%), exp Dec 2027
+Annual Interest                         £142,800 (estimated, based on Oct 2025 rate)
+Annual Capital Repayment                £ 70,000
+Annual Debt Service                     £212,800
+
+DEBT SERVICE COVER RATIO (DSCR)
+---------------------------------
+DSCR (current NOI): £355,600 / £212,800 = 1.67x
+DSCR (passing rent only, no Unit C): £306,400 / £212,800 = 1.44x
+
+NOTE: DSCR falls to 1.20x if Apex Logistics exercises break on Sep 2026
+(loss of £158,200 income). Lender covenant: DSCR ≥ 1.20x.
+Purchaser should stress-test break scenario carefully.
+
+CAPITAL VALUE BASIS
+-------------------
+Passing Rent (let units): £367,800
+Net Initial Yield (on asking price £5,600,000): 6.57%
+Stabilised Yield (assuming Unit C let): 7.59%
+Capital Value psf (total NIA): £188/sq ft

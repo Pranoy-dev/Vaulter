@@ -1,0 +1,62 @@
+DEED OF VARIATION (LEASE AMENDMENT)
+=====================================
+DATED: 15 September 2023
+
+PARTIES
+-------
+(1) LANDLORD : Riverside Holdings plc ("the Landlord")
+(2) TENANT   : TechCorp UK Limited ("the Tenant")
+
+ORIGINAL LEASE
+--------------
+This Deed of Variation relates to the Lease dated 1 April 2020 between
+the Landlord and Tenant in respect of Unit 1, Riverside Business Park,
+Thames Valley, RG1 8PQ.
+
+BACKGROUND
+----------
+The Tenant has requested additional car parking allocation and a licence
+to carry out fit-out works to install a server room within Unit 1.
+The parties have agreed to vary the Original Lease on the terms below.
+
+AGREED VARIATIONS
+-----------------
+1. CAR PARKING
+   Clause 4.3 of the Original Lease is deleted and replaced with:
+   "The Tenant shall have the exclusive use of 65 car parking spaces
+   (increased from 55) within the Business Park car park, identified
+   on the plan attached at Schedule 1 to this Deed."
+
+2. ADDITIONAL RENT — CAR PARKING SUPPLEMENT
+   With effect from 1 October 2023, an additional sum of £12,000 per
+   annum (£1,000 per month) is payable in respect of the 10 additional
+   spaces. This additional rent is to be reviewed in line with
+   Clause 2.2 of the Original Lease.
+
+3. LICENCE TO ALTER — SERVER ROOM
+   The Landlord grants a licence to the Tenant to carry out the
+   following works to Unit 1:
+   - Installation of a raised floor data/server room (approx 400 sq ft)
+   - Enhanced cooling system (CRAC units) within the demised area
+   - UPS installation within the comms room
+   Subject to the Tenant: (a) appointing a Landlord-approved contractor;
+   (b) providing method statements and drawings prior to commencement;
+   (c) reinstating the area to base specification on lease expiry unless
+   the Landlord confirms in writing that reinstatement is not required.
+
+4. ALL OTHER TERMS
+   Save as varied by this Deed, all terms and conditions of the Original
+   Lease remain in full force and effect.
+
+ANNUAL RENT (REVISED TOTAL FROM 1 OCTOBER 2023)
+-------------------------------------------------
+Base rent (post-2025 review): £369,200
+Parking supplement          : £  12,000
+                              ---------
+Total passing rent           : £381,200 per annum
+
+EXECUTED as a deed by both parties.
+
+Signed by TechCorp UK Limited: _____________________________ Date: 15 Sep 2023
+Signed by Riverside Holdings plc: _________________________ Date: 15 Sep 2023
+Witnessed: S. Patel, Solicitor, Freeths LLP, Reading

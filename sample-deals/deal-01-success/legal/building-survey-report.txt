@@ -1,0 +1,67 @@
+BUILDING SURVEY REPORT
+========================
+RICS Level 3 Building Survey
+
+Property    : Riverside Business Park, Units 1–4, Thames Valley, RG1 8PQ
+Client      : Potential Purchaser (confidential)
+Surveyor    : Rachel Bloom BSc MRICS, Bloom Building Consultancy Ltd
+Inspection  : 20 November 2025
+Report Date : 5 December 2025
+
+EXECUTIVE SUMMARY
+-----------------
+The property presents in good overall condition commensurate with its age
+(1998 construction, 2018 refurbishment). No significant structural defects
+were identified during inspection. The refurbishment appears of adequate
+quality. A number of minor maintenance items are noted below (Condition
+Rating 2), none of which is considered to be of immediate material concern.
+
+No Condition Rating 3 (urgent) items were identified.
+
+CONDITION RATINGS SUMMARY
+--------------------------
+Rating 1 (No repair required): Roof (post-refurb membrane), structure,
+  foundations, internal fit-out, heating systems, electrical (recently
+  upgraded 2021), plumbing, lifts (serviced 2024).
+
+Rating 2 (Repairs/replacement needed but not urgent):
+  - External render to Unit 3 north elevation — minor cracking.
+    Estimated cost: £8,000–12,000. Recommend within 2 years.
+  - Expansion joints on Unit 2 external walkway — slight deterioration.
+    Estimated cost: £3,500. Recommend within 12 months.
+  - Replacement of 3 roof lights in Unit 1 atrium showing minor sealing
+    failure. Estimated cost: £6,000. Recommend within 12 months.
+
+Rating 3 (Urgent): NONE
+
+ESTIMATED MAINTENANCE COSTS (10-YEAR CAPEX)
+--------------------------------------------
+Year 1–2     : £22,000 (ratings 2 items, plus planned redecoration Unit 4)
+Year 3–5     : £45,000 (mechanical/electrical servicing, car park resurfacing)
+Year 6–10    : £90,000 (estimated roof membrane replacement contribution,
+                         life-cycle replacements)
+Total 10-year: £157,000
+
+ENVIRONMENTAL AND REGULATORY MATTERS
+--------------------------------------
+Asbestos: An Asbestos Management Survey was carried out in 2018 (ref:
+  AMS-RBP-2018). No ACM materials identified requiring removal.
+  Register held by property manager.
+EPC: All units rated Band B (ratings 38–44) — compliant with MEES 2025
+  requirements (Band D minimum for commercial lettings).
+  Current EPCs valid until 2028.
+Fire Safety: Fire Risk Assessment updated October 2025. No outstanding
+  actions. Compliant with Regulatory Reform (Fire Safety) Order 2005.
+Drainage: CCTV drainage survey conducted October 2023. No blockages or
+  structural defects identified.
+
+CONCLUSION
+-----------
+The property is considered to be in a good state of repair. The identified
+Condition Rating 2 items should be addressed within the timescales indicated.
+Subject to satisfactory legal and environmental enquiries, the building is
+considered suitable for investment purchase.
+
+Signed: Rachel Bloom BSc MRICS          Date: 5 December 2025
+        Bloom Building Consultancy Ltd
+        Regulated by RICS

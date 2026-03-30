@@ -1,0 +1,42 @@
+RENT ROLL — CENTRAL TRADE ESTATE
+==================================
+Prepared by: Midlands Commercial Agency
+Date       : 31 January 2026
+Property   : Central Trade Estate, Birmingham, B26 3QR
+
+UNIT  TENANT                       NIA (SQ FT)  PASSING RENT PA   RENT PSF  LEASE START  LEASE EXPIRY  BREAK DATE    STATUS
+----  ---------------------------  -----------  ----------------  --------  -----------  ------------  ------------  ------
+A     Precision Manufacturing Ltd  13,100       £209,600          £16.00    01-Oct-2018  30-Sep-2028   NONE (lapsed) Let
+B     Apex Logistics Solutions Ltd  9,200       £158,200          £17.20    01-Apr-2021  31-Mar-2027   30-Sep-2026   Let
+C     VOID                          7,500       £0                £0        N/A          N/A           N/A           Void
+
+TOTAL LET AREA          : 22,300 sq ft
+VOID AREA               : 7,500 sq ft (Unit C)
+TOTAL NIA               : 29,800 sq ft
+OCCUPANCY               : 74.8%
+VOID RATE               : 25.2%
+
+TOTAL PASSING RENT (LET UNITS): £367,800 p.a.
+ERV (Unit C @ £8.64/sq ft)    : £  64,800 p.a.
+TOTAL GROSS ERV               : £432,600 p.a.
+
+WAULT CALCULATION (LET UNITS ONLY)
+-------------------------------------
+To Expiry:
+  Unit A: 2.67 yrs × (13,100/22,300) = 1.566
+  Unit B: 1.08 yrs × ( 9,200/22,300) = 0.446
+  WAULT to Expiry = 2.01 years
+
+To Break:
+  Unit A: No break
+  Unit B: 0.50 yrs × ( 9,200/22,300) = 0.206
+  WAULT to Break (applicable leases): 0.5 years (Apex Logistics only)
+
+WARNING: Apex Logistics break on 30 Sep 2026. If exercised, loss of
+£158,200 p.a. representing 43% of passing income. Break notice window
+is OPEN (deadline 31 Mar 2026). Confirm tenant intentions urgently.
+
+OUTSTANDING ITEMS:
+- Unit C lease not in data room (HOT under negotiation)
+- Updated rent deposit confirmation from Precision Manufacturing outstanding
+- No service charge budget for FY2026 provided

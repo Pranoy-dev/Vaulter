@@ -46,6 +46,7 @@ import {
   Folder,
   FolderTree,
   FolderUp,
+  GitBranch,
   GripVertical,
   LayoutGrid,
   Link2,
@@ -54,6 +55,7 @@ import {
   PanelLeftOpen,
   Plus,
   RotateCcw,
+  Search,
   Sparkles,
   Users,
   X,
@@ -2177,9 +2179,11 @@ function ClassificationPanel({
 }
 
 function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChain[]; documents: DealDocument[]; loading: boolean }) {
+  const [query, setQuery] = React.useState("")
+
   if (loading) return <LoadingRows />
   if (chains.length === 0)
-    return <EmptyState icon={Link2} message="No lease chains found yet." />
+    return <EmptyState icon={GitBranch} message="No lease chains found yet. Process the data room to build tenant chains." />
 
   const DOC_TYPE_LABEL: Record<string, string> = {
     base_lease: "Base Lease",
@@ -2189,20 +2193,34 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
     unknown: "Unknown",
   }
 
-  const DOC_TYPE_COLORS: Record<string, string> = {
-    base_lease: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
-    amendment: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400",
-    side_letter: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
+  const DOC_TYPE_BADGE: Record<string, string> = {
+    base_lease: "bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-400",
+    amendment: "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-400",
+    side_letter: "bg-pink-100 text-pink-800 dark:bg-pink-950/50 dark:text-pink-400",
     correspondence: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
     unknown: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
   }
 
-  // Build a lookup from document_id to full DealDocument
-  const docMap = React.useMemo(() => {
-    const map = new Map<string, DealDocument>()
-    for (const d of documents) map.set(d.id, d)
-    return map
-  }, [documents])
+  const DOC_TYPE_DOT: Record<string, string> = {
+    base_lease: "bg-blue-500",
+    amendment: "bg-purple-500",
+    side_letter: "bg-pink-400",
+    unknown: "bg-zinc-300",
+  }
+
+  // Build lookup from document_id → full DealDocument
+  const docMap = new Map<string, DealDocument>()
+  for (const d of documents) docMap.set(d.id, d)
+
+  // Filtered chains
+  const filteredChains = React.useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return chains
+    return chains.filter((c) =>
+      c.tenant_name.toLowerCase().includes(q) ||
+      c.documents.some((d) => (d.filename ?? "").toLowerCase().includes(q))
+    )
+  }, [chains, query])
 
   // Stats
   const totalChains = chains.length
@@ -2211,12 +2229,12 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
   const totalDocs = chains.reduce((sum, c) => sum + c.documents.length, 0)
 
   return (
-    <div className="space-y-3 pr-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ── Summary stats ── */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
           <p className="text-lg font-semibold tabular-nums">{totalChains}</p>
-          <p className="text-[11px] text-muted-foreground">Lease Chains</p>
+          <p className="text-[11px] text-muted-foreground">Tenant Chains</p>
         </div>
         <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
           <p className="text-lg font-semibold tabular-nums">{totalDocs}</p>
@@ -2236,108 +2254,189 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
         </div>
       </div>
 
-      {/* ── Chains ── */}
-      {chains.map((chain) => {
-        // Find any deal document that matches a chain doc for metadata
-        const chainFullDocs = chain.documents
-          .map((cd) => ({ chainDoc: cd, fullDoc: docMap.get(cd.document_id) }))
-          .filter((x) => x.fullDoc)
+      {/* ── Search ── */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search tenant chains…"
+          className="h-9 w-full rounded-lg border border-border/60 bg-background pl-9 pr-3 text-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
 
-        // Get key terms from base lease if available
-        const baseDoc = chainFullDocs.find((x) => x.chainDoc.doc_type === "base_lease")?.fullDoc
-        const keyTerms = baseDoc?.key_terms
-        const parties = baseDoc?.parties
-        const expiryDate = baseDoc?.expiry_date
-
-        return (
-          <div key={chain.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
-            {/* Header */}
-            <div className="border-b border-border/40 bg-muted/30 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <Link2 className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{chain.tenant_name}</p>
-                  {chain.tenant_identifier && chain.tenant_identifier !== chain.tenant_name && (
-                    <p className="truncate text-[11px] text-muted-foreground/70">{chain.tenant_identifier}</p>
-                  )}
-                </div>
-                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                  {chain.documents.length} doc{chain.documents.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              {/* Metadata from base lease */}
-              {(parties || expiryDate || keyTerms) && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {parties?.slice(0, 3).map((p) => (
-                    <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">{p}</span>
-                  ))}
-                  {expiryDate && (
-                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-                      Expires: {expiryDate}
-                    </span>
-                  )}
-                  {keyTerms?.rent_amount && (
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
-                      Rent: {keyTerms.rent_amount}
-                    </span>
-                  )}
-                  {keyTerms?.annual_rent && !keyTerms?.rent_amount && (
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
-                      Rent: {keyTerms.annual_rent}
-                    </span>
-                  )}
-                  {keyTerms?.lease_term && (
-                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                      Term: {keyTerms.lease_term}
-                    </span>
-                  )}
-                  {keyTerms?.rent_escalation && (
-                    <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-950/30 dark:text-green-400">
-                      {keyTerms.rent_escalation}
-                    </span>
-                  )}
-                </div>
-              )}
+      {/* ── Chain cards ── */}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-2.5 pr-1">
+          {filteredChains.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <GitBranch className="size-5" />
+              <p className="text-sm">No matching chains</p>
             </div>
-            {/* Documents in chain */}
-            <div className="divide-y divide-border/30">
-              {chain.documents.map((doc) => {
-                const fullDoc = docMap.get(doc.document_id)
-                return (
-                  <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5">
-                    <div className="flex size-5 shrink-0 items-center justify-center">
-                      {doc.doc_type === "base_lease" ? (
-                        <FileIcon className="size-3.5 text-blue-500" />
-                      ) : doc.doc_type === "amendment" ? (
-                        <FilePenLine className="size-3.5 text-purple-500" />
-                      ) : (
-                        <ChevronRight className="size-3.5 text-muted-foreground/40" />
-                      )}
-                    </div>
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={doc.original_path ?? ""}>
-                      {doc.filename ?? doc.original_path ?? "Unknown"}
-                    </span>
-                    {fullDoc?.has_signature && (
-                      <HoverTooltip content="Signed document">
-                        <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
-                      </HoverTooltip>
-                    )}
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${DOC_TYPE_COLORS[doc.doc_type] ?? DOC_TYPE_COLORS.unknown}`}>
-                      {DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}
-                      {doc.amendment_number != null ? ` #${doc.amendment_number}` : ""}
-                    </span>
-                    {doc.is_orphaned && (
-                      <HoverTooltip content="Orphaned — this amendment has no matching base lease in the chain.">
-                        <AlertTriangle className="size-4 shrink-0 text-amber-500 cursor-default" />
-                      </HoverTooltip>
-                    )}
+          ) : (
+            filteredChains.map((chain) => {
+              const chainDocs = chain.documents
+              const hasBase = chainDocs.some((d) => d.doc_type === "base_lease")
+              const normalDocs = chainDocs.filter((d) => !d.is_orphaned)
+              const orphanedDocs = chainDocs.filter((d) => d.is_orphaned)
+
+              // Get metadata from base lease
+              const baseDoc = chainDocs.find((d) => d.doc_type === "base_lease")
+              const baseFull = baseDoc ? docMap.get(baseDoc.document_id) : undefined
+              const parties = baseFull?.parties
+              const expiryDate = baseFull?.expiry_date
+              const keyTerms = baseFull?.key_terms
+              const hasSig = baseFull?.has_signature
+
+              return (
+                <Collapsible key={chain.id} defaultOpen={false} className="group/chain">
+                  <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
+                    {/* Trigger header */}
+                    <CollapsibleTrigger className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors">
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground/60 transition-transform group-data-[state=open]/chain:rotate-90" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">{chain.tenant_name}</p>
+                        {/* Metadata tags */}
+                        {(parties || expiryDate || keyTerms) && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {parties?.slice(0, 2).map((p) => (
+                              <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">{p}</span>
+                            ))}
+                            {expiryDate && (
+                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                                Expires: {expiryDate}
+                              </span>
+                            )}
+                            {keyTerms?.annual_rent && (
+                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                                Rent: {keyTerms.annual_rent}
+                              </span>
+                            )}
+                            {keyTerms?.lease_term && (
+                              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                Term: {keyTerms.lease_term}
+                              </span>
+                            )}
+                            {hasSig && (
+                              <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                                ✓ Signed
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {/* Badges */}
+                      <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold ${orphanedDocs.length > 0 ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"}`}>
+                        {orphanedDocs.length > 0 ? `${orphanedDocs.length} orphaned` : "Clean chain"}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                        {chainDocs.length} doc{chainDocs.length !== 1 ? "s" : ""}
+                      </span>
+                    </CollapsibleTrigger>
+
+                    {/* Expandable content */}
+                    <CollapsibleContent>
+                      <div className="border-t border-border/40 px-3 py-3">
+                        {/* Timeline for normal docs */}
+                        {normalDocs.length > 0 && (
+                          <ol className="relative m-0 list-none space-y-1.5 p-0">
+                            {/* Vertical line */}
+                            <span aria-hidden className="pointer-events-none absolute top-2 bottom-2 left-[11px] z-0 w-0.5 bg-border/60" />
+                            {normalDocs.map((doc) => {
+                              const fullDoc = docMap.get(doc.document_id)
+                              return (
+                                <li key={doc.id} className="relative z-[1] flex min-w-0 gap-2.5">
+                                  {/* Dot */}
+                                  <div className="flex w-6 shrink-0 justify-center pt-2.5">
+                                    <span className={`relative z-10 size-2.5 rounded-full ring-2 ring-background ${DOC_TYPE_DOT[doc.doc_type] ?? DOC_TYPE_DOT.unknown}`} />
+                                  </div>
+                                  {/* Card */}
+                                  <div className="min-w-0 flex-1 rounded-lg border border-border/40 bg-background px-3 py-2 shadow-sm">
+                                    <div className="flex items-center gap-2">
+                                      {doc.doc_type === "base_lease" ? (
+                                        <FileIcon className="size-3.5 shrink-0 text-blue-500" />
+                                      ) : doc.doc_type === "amendment" ? (
+                                        <FilePenLine className="size-3.5 shrink-0 text-purple-500" />
+                                      ) : (
+                                        <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
+                                      )}
+                                      <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
+                                        {doc.filename ?? "Unknown"}
+                                      </span>
+                                      {fullDoc?.has_signature && (
+                                        <HoverTooltip content="Signed document">
+                                          <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
+                                        </HoverTooltip>
+                                      )}
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${DOC_TYPE_BADGE[doc.doc_type] ?? DOC_TYPE_BADGE.unknown}`}>
+                                        {DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}
+                                        {doc.amendment_number != null ? ` #${doc.amendment_number}` : ""}
+                                      </span>
+                                    </div>
+                                    {/* Extra metadata for base lease */}
+                                    {doc.doc_type === "base_lease" && fullDoc?.summary && (
+                                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground line-clamp-2">{fullDoc.summary}</p>
+                                    )}
+                                  </div>
+                                </li>
+                              )
+                            })}
+                          </ol>
+                        )}
+
+                        {/* Orphaned section */}
+                        {orphanedDocs.length > 0 && (
+                          <div className={normalDocs.length > 0 ? "mt-3 border-t border-dashed border-amber-300/80 pt-3 dark:border-amber-700/60" : ""}>
+                            <div className="mb-2 flex items-center gap-1.5">
+                              <AlertTriangle className="size-3 text-amber-500" />
+                              <p className="text-[10px] font-bold tracking-widest text-amber-700 uppercase dark:text-amber-400">
+                                Orphaned — no matched base lease
+                              </p>
+                            </div>
+                            <ol className="relative m-0 list-none space-y-1.5 p-0">
+                              <span aria-hidden className="pointer-events-none absolute top-2 bottom-2 left-[11px] z-0 w-0.5 bg-amber-300/60 dark:bg-amber-700/40" />
+                              {orphanedDocs.map((doc) => {
+                                const fullDoc = docMap.get(doc.document_id)
+                                return (
+                                  <li key={doc.id} className="relative z-[1] flex min-w-0 gap-2.5">
+                                    <div className="flex w-6 shrink-0 justify-center pt-2.5">
+                                      <span className="relative z-10 size-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
+                                    </div>
+                                    <div className="min-w-0 flex-1 rounded-lg border-2 border-amber-300/80 bg-amber-50/50 px-3 py-2 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/20">
+                                      <div className="flex items-center gap-2">
+                                        <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+                                        <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
+                                          {doc.filename ?? "Unknown"}
+                                        </span>
+                                        {fullDoc?.has_signature && (
+                                          <HoverTooltip content="Signed document">
+                                            <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
+                                          </HoverTooltip>
+                                        )}
+                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${DOC_TYPE_BADGE[doc.doc_type] ?? DOC_TYPE_BADGE.unknown}`}>
+                                          {DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}
+                                          {doc.amendment_number != null ? ` #${doc.amendment_number}` : ""}
+                                        </span>
+                                      </div>
+                                      <p className="mt-1 text-[11px] text-amber-700/80 dark:text-amber-400/70">
+                                        This {(DOC_TYPE_LABEL[doc.doc_type] ?? "document").toLowerCase()} has no base lease in the chain. Upload the original lease to complete the chain.
+                                      </p>
+                                    </div>
+                                  </li>
+                                )
+                              })}
+                            </ol>
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleContent>
                   </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
+                </Collapsible>
+              )
+            })
+          )}
+        </div>
+      </ScrollArea>
     </div>
   )
 }
