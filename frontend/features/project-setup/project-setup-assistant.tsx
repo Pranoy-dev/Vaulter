@@ -130,7 +130,7 @@ function ChatHistorySheet({
               onClick={() => { onLoadSession(s.id); onOpenChange(false) }}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { onLoadSession(s.id); onOpenChange(false) } }}
               className={cn(
-                "group w-full flex items-start justify-between gap-2 px-4 py-2.5 text-left hover:bg-white/5 transition-colors cursor-pointer",
+                "group w-full flex items-start justify-between gap-2 px-4 py-2.5 text-left hover:bg-white/5 transition-colors cursor-pointer border-b border-border/40",
                 s.id === currentSessionId && "bg-white/8"
               )}
             >
@@ -145,10 +145,10 @@ function ChatHistorySheet({
               <button
                 onClick={(e) => handleDelete(e, s.id)}
                 disabled={deletingId === s.id}
-                className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                className="shrink-0 mt-0.5 text-muted-foreground/50 hover:text-destructive transition-colors"
                 title="Delete this chat"
               >
-                <Trash2Icon className="h-3 w-3" />
+                <Trash2Icon className="size-4" />
               </button>
             </div>
           ))}
@@ -167,7 +167,7 @@ function ChatHistorySheet({
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            variant="destructive"
             onClick={() => { if (confirmDeleteId) { executeDelete(confirmDeleteId); setConfirmDeleteId(null) } }}
           >
             Delete
@@ -434,7 +434,7 @@ function ChatInstance({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
               onClick={() => { setConfirmDelete(false); onDeleteChat(sessionId) }}
             >
               Delete
