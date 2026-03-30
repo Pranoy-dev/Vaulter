@@ -3068,11 +3068,23 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     {processingJob.status === "running" && processingJob.currentStage === "building_overview" ? (
                       <Loader2 className="ml-1 size-3 animate-spin text-primary/70" />
                     ) : (dealData.insights as DealInsights | null) ? (
-                      <HoverTooltip content={`Deal Risk Score: ${Math.round((dealData.insights as DealInsights).risk_score)}/100. Higher = safer. Band: ${(dealData.insights as DealInsights).risk_band.label}.`}>
-                        <span className="ml-1 cursor-help rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-green-700 dark:bg-green-950/50 dark:text-green-400">
-                          {Math.round((dealData.insights as DealInsights).risk_score)}%
-                        </span>
-                      </HoverTooltip>
+                      (() => {
+                        const ins = dealData.insights as DealInsights
+                        const color = ins.risk_band.color
+                        const badgeCls = {
+                          green:  "bg-green-100  text-green-700  dark:bg-green-950/50  dark:text-green-400",
+                          amber:  "bg-amber-100  text-amber-700  dark:bg-amber-950/50  dark:text-amber-400",
+                          orange: "bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400",
+                          red:    "bg-red-100    text-red-700    dark:bg-red-950/50    dark:text-red-400",
+                        }[color] ?? "bg-muted text-muted-foreground"
+                        return (
+                          <HoverTooltip content={`Deal Risk Score: ${Math.round(ins.risk_score)}/100. Higher = safer. Band: ${ins.risk_band.label}.`}>
+                            <span className={`ml-1 cursor-help rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${badgeCls}`}>
+                              {Math.round(ins.risk_score)}%
+                            </span>
+                          </HoverTooltip>
+                        )
+                      })()
                     ) : null}
                   </ToggleGroupItem>
                   <ToggleGroupItem
