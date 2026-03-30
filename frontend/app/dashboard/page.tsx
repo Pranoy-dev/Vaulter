@@ -6,13 +6,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { ProjectSetupScreen } from "@/features/project-setup"
 import { HeaderNav } from "@/components/header-nav"
 import { useAuth } from "@clerk/nextjs"
 import { apiFetch } from "@/lib/api-client"
 import { useUserSync } from "@/hooks/use-user-sync"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, FileIcon, FolderUp, HardDriveIcon, Loader2, PlusIcon, SearchIcon } from "lucide-react"
+import { ArrowLeft, CheckCircle2, FileIcon, FolderUp, HardDriveIcon, Loader2, PlusIcon, SearchIcon, Trash2 } from "lucide-react"
 import { uploadFiles, type FileEntry } from "@/lib/chunked-upload"
 import { Progress } from "@/components/ui/progress"
 
@@ -304,43 +314,60 @@ function ProjectCard({
   deal,
   index,
   onClick,
+  onDelete,
 }: {
   deal: Deal
   index: number
   onClick: () => void
+  onDelete: () => void
 }) {
   const accent = CARD_ACCENTS[index % CARD_ACCENTS.length]
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card text-left shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    <div
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm transition-all duration-150 hover:shadow-md hover:-translate-y-0.5"
     >
-      {/* coloured header banner */}
-      <div className={`h-14 w-full bg-gradient-to-br ${accent}`} />
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex flex-1 flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+      >
+        {/* coloured header banner */}
+        <div className={`h-14 w-full bg-gradient-to-br ${accent}`} />
 
-      {/* name + description */}
-      <div className="flex flex-col gap-1 px-4 pt-3 pb-2">
-        <span className="font-semibold leading-tight text-foreground">{deal.name}</span>
-        {deal.description ? (
-          <span className="line-clamp-2 text-sm text-muted-foreground">{deal.description}</span>
-        ) : (
-          <span className="text-sm text-muted-foreground/40 italic">No description</span>
-        )}
-      </div>
+        {/* name + description */}
+        <div className="flex flex-col gap-1 px-4 pt-3 pb-2">
+          <span className="font-semibold leading-tight text-foreground">{deal.name}</span>
+          {deal.description ? (
+            <span className="line-clamp-2 text-sm text-muted-foreground">{deal.description}</span>
+          ) : (
+            <span className="text-sm text-muted-foreground/40 italic">No description</span>
+          )}
+        </div>
 
-      {/* footer stats */}
-      <div className="mt-auto flex items-center justify-between border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <FileIcon className="size-3.5 shrink-0" />
-          {deal.file_count ?? 0} docs
-        </span>
-        <span className="flex items-center gap-1.5">
-          <HardDriveIcon className="size-3.5 shrink-0" />
-          {formatBytes(deal.total_size ?? 0)}
-        </span>
-      </div>
-    </button>
+        {/* footer stats */}
+        <div className="mt-auto flex items-center justify-between border-t border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <FileIcon className="size-3.5 shrink-0" />
+            {deal.file_count ?? 0} docs
+          </span>
+          <span className="flex items-center gap-1.5">
+            <HardDriveIcon className="size-3.5 shrink-0" />
+            {formatBytes(deal.total_size ?? 0)}
+          </span>
+        </div>
+      </button>
+
+      {/* delete button — visible on hover */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDelete() }}
+        className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-md bg-background/90 border border-border/80 shadow-sm text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:text-destructive hover:border-destructive/50 hover:bg-destructive/5"
+        aria-label="Delete project"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </div>
   )
 }
 
@@ -359,6 +386,20 @@ function ProjectsHome({
   const [deals, setDeals] = React.useState<Deal[]>([])
   const [loading, setLoading] = React.useState(true)
   const [search, setSearch] = React.useState("")
+
+  const [deleteTarget, setDeleteTarget] = React.useState<Deal | null>(null)
+  const [isDeleting, setIsDeleting] = React.useState(false)
+
+  const handleDelete = async (dealId: string, dealName: string) => {
+    setIsDeleting(true)
+    const result = await apiFetch(`/api/deals/${dealId}`, getToken, { method: "DELETE" })
+    setIsDeleting(false)
+    if (result !== null) {
+      setDeals((prev) => prev.filter((d) => d.id !== dealId))
+      setDeleteTarget(null)
+      toast.success(`"${dealName}" deleted`)
+    }
+  }
 
   React.useEffect(() => {
     if (!isSignedIn) return
@@ -439,6 +480,7 @@ function ProjectsHome({
                       deal={deal}
                       index={i}
                       onClick={() => onOpenDeal(deal.id, deal.name)}
+                      onDelete={() => setDeleteTarget(deal)}
                     />
                   ))}
                 </div>
@@ -448,11 +490,30 @@ function ProjectsHome({
         </div>
         </div>
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTarget?.name}</strong> and all its documents will be permanently deleted. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={(e) => { e.preventDefault(); if (deleteTarget) handleDelete(deleteTarget.id, deleteTarget.name) }}
+            >
+              {isDeleting ? <Loader2 className="size-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
-
-// -- Page ---------------------------------------------------------------------
 
 type View = "home" | "new-project" | "project"
 
