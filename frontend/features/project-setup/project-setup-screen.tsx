@@ -688,12 +688,12 @@ function DocSummariesBlock({
                     >
                       <div className="flex items-center gap-2">
                         <FileIcon className="size-3 shrink-0 text-muted-foreground/50" />
-                        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground">{doc.filename}</span>
                         {onPreview && (
                           loadingPreviewId === doc.id
                             ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground/50" />
                             : <Eye className="size-3 shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground" />
                         )}
+                        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground">{doc.filename}</span>
                       </div>
                       {doc.summary && (
                         <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{doc.summary}</p>
@@ -960,54 +960,59 @@ function AiInsightsPanel({ dealId, documents, loading, insights, getToken }: { d
         </div>
       )}
 
-      {/* ── Key Risk Drivers ── */}
-      {insights.risk_drivers.length > 0 && (
-        <div className="space-y-1">
-          <HoverTooltip content="Individual factors that raised or lowered the risk score. Severity: Critical (red) · Warning (amber) · Info (blue) · Positive (green).">
-            <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">Key risk signals</p>
-          </HoverTooltip>
-          {insights.risk_drivers.map((d, i) => {
-            const sev = SEVERITY_ICONS[d.severity] ?? SEVERITY_ICONS.info
-            const SevIcon = sev.icon
-            return (
-              <div key={i} className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
-                <SevIcon className={`mt-0.5 size-3.5 shrink-0 ${sev.color}`} />
-                <p className="text-xs text-muted-foreground">{d.message}</p>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {/* ── Key Risk Drivers + What's Missing – side by side on lg ── */}
+      {(insights.risk_drivers.length > 0 || insights.missing_items.length > 0) && (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start">
+          {/* Key risk signals */}
+          {insights.risk_drivers.length > 0 && (
+            <div className="space-y-1">
+              <HoverTooltip content="Individual factors that raised or lowered the risk score. Severity: Critical (red) · Warning (amber) · Info (blue) · Positive (green).">
+                <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">Key risk signals</p>
+              </HoverTooltip>
+              {insights.risk_drivers.map((d, i) => {
+                const sev = SEVERITY_ICONS[d.severity] ?? SEVERITY_ICONS.info
+                const SevIcon = sev.icon
+                return (
+                  <div key={i} className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
+                    <SevIcon className={`mt-0.5 size-3.5 shrink-0 ${sev.color}`} />
+                    <p className="text-xs text-muted-foreground">{d.message}</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
-      {/* ── What's Missing Checklist ── */}
-      {insights.missing_items.length > 0 && (
-        <div className="space-y-1">
-          <HoverTooltip content="Documents expected in a typical data room that are absent or incomplete. Tier 1 Critical = essential legal/financial docs · Tier 2 Important = strongly recommended · Tier 3 Standard = best practice.">
-            <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">What&apos;s missing</p>
-          </HoverTooltip>
-          {insights.missing_items.map((m, i) => {
-            const tierColors: Record<number, string> = {
-              1: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
-              2: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
-              3: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-            }
-            const tierLabels: Record<number, string> = { 1: "Critical", 2: "Important", 3: "Standard" }
-            const tierTooltips: Record<number, string> = {
-              1: "Tier 1 — Critical: absence of this document materially increases deal risk.",
-              2: "Tier 2 — Important: strongly recommended for a complete data room.",
-              3: "Tier 3 — Standard: best-practice inclusion; lower impact if missing.",
-            }
-            return (
-              <div key={i} className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
-                <HoverTooltip content={tierTooltips[m.tier] ?? "Missing document item."}>
-                  <span className={`mt-0.5 cursor-help shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${tierColors[m.tier] ?? tierColors[3]}`}>
-                    {tierLabels[m.tier] ?? "Info"}
-                  </span>
-                </HoverTooltip>
-                <p className="text-xs text-muted-foreground">{m.message}</p>
-              </div>
-            )
-          })}
+          {/* What's missing */}
+          {insights.missing_items.length > 0 && (
+            <div className="space-y-1">
+              <HoverTooltip content="Documents expected in a typical data room that are absent or incomplete. Tier 1 Critical = essential legal/financial docs · Tier 2 Important = strongly recommended · Tier 3 Standard = best practice.">
+                <p className="inline-flex cursor-help items-center gap-1 text-xs font-medium text-muted-foreground">What&apos;s missing</p>
+              </HoverTooltip>
+              {insights.missing_items.map((m, i) => {
+                const tierColors: Record<number, string> = {
+                  1: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
+                  2: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+                  3: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+                }
+                const tierLabels: Record<number, string> = { 1: "Critical", 2: "Important", 3: "Standard" }
+                const tierTooltips: Record<number, string> = {
+                  1: "Tier 1 — Critical: absence of this document materially increases deal risk.",
+                  2: "Tier 2 — Important: strongly recommended for a complete data room.",
+                  3: "Tier 3 — Standard: best-practice inclusion; lower impact if missing.",
+                }
+                return (
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
+                    <HoverTooltip content={tierTooltips[m.tier] ?? "Missing document item."}>
+                      <span className={`cursor-help shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${tierColors[m.tier] ?? tierColors[3]}`}>
+                        {tierLabels[m.tier] ?? "Info"}
+                      </span>
+                    </HoverTooltip>
+                    <p className="text-xs text-muted-foreground">{m.message}</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -2617,12 +2622,12 @@ function LeaseAmendmentPanel({ chains, documents, loading, dealId, getToken }: {
                                       ) : (
                                         <FileIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
                                       )}
-                                      <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
-                                        {doc.filename ?? "Unknown"}
-                                      </span>
                                       {loadingPreviewId === doc.document_id
                                         ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground/50" />
                                         : getToken ? <Eye className="size-3 shrink-0 text-muted-foreground/30" /> : null}
+                                      <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
+                                        {doc.filename ?? "Unknown"}
+                                      </span>
                                       {fullDoc?.has_signature && (
                                         <HoverTooltip content="Signed document">
                                           <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
@@ -2671,12 +2676,12 @@ function LeaseAmendmentPanel({ chains, documents, loading, dealId, getToken }: {
                                     >
                                       <div className="flex items-center gap-2">
                                         <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
-                                        <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
-                                          {doc.filename ?? "Unknown"}
-                                        </span>
                                         {loadingPreviewId === doc.document_id
                                           ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground/50" />
                                           : getToken ? <Eye className="size-3 shrink-0 text-muted-foreground/30" /> : null}
+                                        <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
+                                          {doc.filename ?? "Unknown"}
+                                        </span>
                                         {fullDoc?.has_signature && (
                                           <HoverTooltip content="Signed document">
                                             <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
