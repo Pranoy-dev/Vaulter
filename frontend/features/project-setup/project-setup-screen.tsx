@@ -3530,7 +3530,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                         <span>Status / Reason</span>
                       </div>
                       <ScrollArea className="max-h-[40vh]">
-                        <div className="divide-y divide-border/30">
+                        <div className="divide-y divide-border/30 pb-2">
                           {selectedFiles.map((entry) => {
                             const supported = isSupported(entry.relativePath)
                             const isConflict = existingPathSet.has(entry.relativePath) && supported
@@ -3582,7 +3582,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                             return (
                               <div
                                 key={entry.relativePath}
-                                className={`grid grid-cols-[1fr_72px_140px] items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/20 ${!supported || willSkip ? "opacity-60" : ""}`}
+                                className={`grid grid-cols-[1fr_72px_140px] items-center gap-2 px-3 py-2 text-xs hover:bg-muted/20 ${!supported || willSkip ? "opacity-60" : ""}`}
                               >
                                 <div className="flex items-center gap-2 min-w-0">
                                   {!supported ? (
