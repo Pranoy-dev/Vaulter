@@ -1,0 +1,71 @@
+SIDE LETTER — DILAPIDATIONS PROTOCOL
+======================================
+DATED: 22 November 2025
+
+FROM: Riverside Holdings plc ("Landlord")
+TO  : TechCorp UK Ltd ("Tenant")
+
+RE  : Unit 1, Riverside Business Park, Thames Valley, RG1 8PQ
+      Lease dated 1 April 2020 (as varied)
+
+Dear Sirs,
+
+I refer to the above Lease and to discussions between our respective
+property managers regarding the forthcoming break option on 31 March 2028.
+
+The parties have agreed the following protocol in respect of dilapidations
+and terminal schedule of condition, to apply without prejudice to the
+Landlord's full rights under the Lease:
+
+1. INTERIM INSPECTION
+   The Landlord's surveyor shall have the right to conduct an interim
+   dilapidations inspection of Unit 1 no earlier than 12 months before
+   the Break Option Date (i.e. from 1 April 2027). The Tenant shall
+   provide reasonable access on not less than 10 working days' notice.
+
+2. SCHEDULE OF DILAPIDATIONS
+   Should the Tenant elect to exercise the Break Option, the Landlord
+   shall serve a terminal schedule of dilapidations no later than
+   3 months prior to the Break Option Date. The Tenant shall have
+   60 days to agree or dispute items on the schedule.
+
+3. SERVER ROOM REINSTATEMENT
+   With reference to the Deed of Variation dated 15 September 2023
+   (Clause 3 — Licence to Alter — Server Room), the Landlord confirms
+   that, subject to the server room being in good condition and the
+   raised floor undamaged, the Landlord SHALL NOT require reinstatement
+   of the server room to base specification on break / expiry. The
+   enhanced cooling system (CRAC units) and UPS installation shall
+   remain in situ.
+
+   This confirmation saves the Tenant an estimated reinstatement cost
+   of £145,000–£175,000 (based on QS estimate dated October 2025).
+
+4. SUB-LET AREA (SOUTH WING)
+   The sub-lease to DataStream Analytics Limited expires 31 January 2026.
+   On expiry of the sub-lease, the open-plan specification reinstatement
+   obligation (per Licence to Sub-Let dated 12 January 2024, Clause 2(e))
+   shall apply. The Tenant confirms it has budgeted for these works.
+
+5. PHOTOGRAPHIC RECORD
+   Both parties agree to commission an independent photographic schedule
+   of condition within 30 days of the date of this letter. The cost shall
+   be split equally. The record will be admissible in any dilapidations
+   negotiation.
+
+This letter does not operate as a deed and does not vary the terms of the
+Lease save to the extent expressly stated above. In the event of conflict
+between this letter and the Lease, the Lease shall prevail.
+
+Yours faithfully,
+
+_________________________________
+For and on behalf of
+Riverside Holdings plc
+
+Acknowledged and agreed:
+
+_________________________________
+For and on behalf of
+TechCorp UK Ltd
+Date: 22 November 2025

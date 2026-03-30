@@ -1,0 +1,89 @@
+FashionZone Ltd — CVA PROPOSAL SUMMARY (EXTRACT)
+==================================================
+Prepared by : Restructure Partners LLP (Proposed CVA Supervisors)
+Issued to   : Creditors of FashionZone Limited
+Date        : 15 January 2026
+
+CONFIDENTIAL — FOR CREDITOR USE ONLY
+
+COMPANY OVERVIEW
+-----------------
+FashionZone Limited (Company No. 04987654) operates 14 high-street and
+retail park fashion stores across the North West and Midlands. The company
+employs 186 staff (124 FTE equivalent).
+
+REASONS FOR CVA
+----------------
+Since 2022, FashionZone has experienced a sustained decline in revenues:
+  - FY2022 revenue: £18.4m | EBITDA: £1.2m
+  - FY2023 revenue: £15.8m | EBITDA: £0.3m (margin compression)
+  - FY2024 revenue: £12.1m | EBITDA: -£0.8m (loss-making)
+  - H1 FY2025 (Jul–Dec 2025): revenue £4.9m | EBITDA: -£1.1m (annualised)
+
+The primary causes are:
+1. Structural decline in high-street retail footfall (accelerated post-COVID)
+2. Competition from online fast-fashion retailers
+3. Above-market rents locked in during 2015–2017 lease cycle
+4. Cost inflation (energy, minimum wage, business rates)
+
+STORE PORTFOLIO — CVA TREATMENT
+---------------------------------
+The CVA proposes three categories for the company's 14 stores:
+
+Category A — Continue (7 stores): Profitable or near-profitable.
+  Full rent payable. No modification.
+
+Category B — Modified terms (4 stores): Marginally viable.
+  Rent reduced by 30% for CVA duration.
+  *** PARKWAY RETAIL CENTRE (Unit 1, Stockport) IS A CATEGORY B STORE ***
+
+Category C — Close (3 stores): Loss-making. Leases to be surrendered.
+  Derelict stores in secondary locations.
+
+PARKWAY RETAIL CENTRE — SPECIFIC TERMS
+-----------------------------------------
+Store                : Unit 1, Parkway Retail Centre, Stockport, SK1 3UA
+NIA                  : 14,000 sq ft
+Current rent (pre-CVA): £364,000 per annum (£26.00/sq ft)
+CVA rent             : £254,800 per annum (£18.20/sq ft) — 30% reduction
+CVA service charge   : £19,600 per annum (reduced from £28,000)
+Pre-CVA arrears      : £62,300 (Nov 2025 – Jan 2026)
+Deposit applied      : £91,000 (fully consumed against prior arrears)
+
+Projected trading (Stockport store, CVA period Feb–Sep 2026):
+  Revenue            : £960,000 (8 months)
+  Cost of sales      : £576,000 (60% gross margin)
+  Store costs (excl rent): £248,000
+  CVA rent + SC      : £182,933 (8 months)
+  Store contribution : -£46,933 (loss-making even at CVA rent)
+
+  NOTE: The Stockport store is projected to be loss-making under CVA terms.
+  FashionZone's Board has decided to continue trading to protect wider brand
+  perception and because the lease expires September 2026 (no ongoing
+  liability post-expiry).
+
+CREDITOR TREATMENT
+-------------------
+Secured creditors   : Barclays Bank (floating charge) — paid in full from
+                      CVA cash flows
+Preferential        : HMRC — paid in full within 12 months
+Unsecured creditors : 15p in the £ over 24 months
+  - Landlord claims (rent arrears): £312,000 aggregate across all stores
+  - Parkway Retail Fund claim: £62,300 → estimated recovery: £9,345
+  - Trade creditors: £1.4m → estimated recovery: £210,000
+
+SUPERVISOR'S ASSESSMENT
+------------------------
+The Proposed Supervisors believe the CVA offers a better outcome for
+creditors than liquidation. In liquidation, unsecured creditors would
+receive nil. Under the CVA, the dividend is estimated at 15p in the £.
+
+VOTING DEADLINE: 10 February 2026
+CREDITOR MEETING: 10 February 2026 at 2:00pm
+Venue: Manchester Conference Centre, Sackville Street, M1 3BB
+
+This is an EXTRACT. Full CVA Proposal (87 pages) available on request
+from Restructure Partners LLP.
+
+Contact: a.morrison@restructurepartners.co.uk
+Tel: 0161 234 5678

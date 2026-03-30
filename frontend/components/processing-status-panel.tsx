@@ -16,32 +16,32 @@ const STAGES = [
   {
     key: "indexing" as const,
     label: "Document Indexing",
-    description: "Extracting and indexing text for RAG search",
+    description: "Extracting text and indexing content for RAG search",
   },
   {
     key: "detecting_hash_duplicates" as const,
     label: "Hash Duplicate Detection",
-    description: "Finding identical files by SHA-256 hash",
+    description: "Finding identical files by SHA-256 fingerprinting",
   },
   {
     key: "document_processing" as const,
     label: "AI Document Processing",
-    description: "Extracting text, classifying, and checking completeness via Gemini",
+    description: "Gemini extraction · Classification · Completeness scoring · RAG embedding",
   },
   {
     key: "detecting_duplicates" as const,
-    label: "Content Duplicate Detection",
-    description: "Finding near-duplicate files by content similarity",
+    label: "Semantic Duplicate Detection",
+    description: "Cosine-similarity vector search across embedded document chunks",
   },
   {
     key: "linking_documents" as const,
-    label: "Lease Linking",
-    description: "Building lease amendment chains",
+    label: "Lease Chain Assembly",
+    description: "Regex + Levenshtein tenant matching · Amendment ordering · Orphan flagging",
   },
   {
     key: "building_overview" as const,
-    label: "Building Overview",
-    description: "Computing summaries and insight data",
+    label: "AI Insights & Risk Scoring",
+    description: "WAULT computation · 3-dimension risk model · Circuit breakers · What's Missing checklist",
   },
 ]
 
@@ -53,6 +53,7 @@ function StageRow({
   currentFile,
   aiDetail,
   ragDetail,
+  stageHint,
 }: {
   label: string
   description: string
@@ -61,6 +62,7 @@ function StageRow({
   currentFile?: string | null
   aiDetail?: { current: number; total: number } | null
   ragDetail?: { current: number; total: number } | null
+  stageHint?: string | null
 }) {
   const isDocRunning = status === "running" && (aiDetail || ragDetail)
 
@@ -146,6 +148,14 @@ function StageRow({
             )}
           </div>
         )}
+
+        {/* Algorithm hint for linking / scoring stages */}
+        {status === "running" && stageHint && !isDocRunning && (
+          <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-primary/5 px-2 py-1.5">
+            <Loader2 className="size-2.5 shrink-0 animate-spin text-primary" />
+            <span className="text-[10px] text-primary/80">{stageHint}</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -214,6 +224,29 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
         {STAGES.map((stage) => {
           const status = stageStatus(stage.key, job)
           const isDocProcessing = stage.key === "document_processing"
+          const isLinking = stage.key === "linking_documents"
+          const isBuilding = stage.key === "building_overview"
+
+          const LINKING_SUB_LABELS: Record<string, string> = {
+            classifying_docs: "Classifying document types via regex patterns…",
+            fuzzy_matching: "Levenshtein fuzzy matching across tenant names…",
+            building_chains: "Assembling amendment chains · detecting orphans…",
+          }
+          const BUILDING_SUB_LABELS: Record<string, string> = {
+            computing_wault: "Computing WAULT — rent-weighted average lease term…",
+            scoring_dimensions: "Scoring completeness, lease risk & financial risk across 3 dimensions…",
+            applying_circuit_breakers: "Applying circuit breakers for critical threshold overrides…",
+            building_checklist: "Building What's Missing checklist and risk driver list…",
+          }
+
+          const activeSubStage = (isLinking || isBuilding) && status === "running" ? (job.subStage ?? null) : null
+          const stageHint = isLinking && status === "running"
+            ? (activeSubStage && LINKING_SUB_LABELS[activeSubStage])
+              || "Regex classification → Levenshtein fuzzy matching → chain assembly → orphan detection…"
+            : isBuilding && status === "running"
+            ? (activeSubStage && BUILDING_SUB_LABELS[activeSubStage])
+              || "Computing WAULT · Scoring completeness, lease risk & financial risk · Applying circuit breakers · Generating what's missing checklist…"
+            : null
           return (
             <StageRow
               key={stage.key}
@@ -224,6 +257,7 @@ export function ProcessingStatusPanel({ dealId }: { dealId: string | null }) {
               currentFile={isDocProcessing && status === "running" ? job.currentFile : null}
               aiDetail={isDocProcessing && status === "running" ? job.aiDetail : null}
               ragDetail={isDocProcessing && status === "running" ? job.ragDetail : null}
+              stageHint={stageHint}
             />
           )
         })}

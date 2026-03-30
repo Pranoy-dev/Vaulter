@@ -967,6 +967,21 @@ def compute_deal_insights(deal_id: str) -> dict:
         for cat, count in sorted(categories.items(), key=lambda x: -x[1])
     ]
 
+    # ── Lease chain summary for chat context ─────────────────────────────────
+    orphaned_count = sum(
+        1 for c in chains
+        if not any(
+            (d.get("document_type") or "").lower() in ("lease", "head lease", "underlease")
+            for d in c["documents"]
+        )
+    )
+    lease_chain_summary = {
+        "total_chains": len(chains),
+        "with_base_lease": len(chains) - orphaned_count,
+        "orphaned_count": orphaned_count,
+        "total_docs_linked": sum(len(c["documents"]) for c in chains),
+    }
+
     return {
         "risk_score": round(final_score, 1),
         "risk_band": _get_risk_band(final_score),
@@ -991,10 +1006,11 @@ def compute_deal_insights(deal_id: str) -> dict:
         "risk_drivers": all_drivers[:10],  # top 10
         "missing_items": missing_items,
         "key_metrics": key_metrics,
-        "wault": round(wault, 1) if wault is not None else None,
+        "wault": round(wault, 2) if wault is not None else None,
         "expiry_timeline": expiry_timeline,
         "category_breakdown": category_breakdown,
         "document_insights": document_insights,
         "total_documents": len(docs),
         "processed_documents": sum(1 for d in docs if d.get("processing_status") == "completed"),
+        "lease_chain_summary": lease_chain_summary,
     }

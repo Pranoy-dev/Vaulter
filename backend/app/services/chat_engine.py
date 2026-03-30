@@ -504,56 +504,93 @@ def _build_insights_context(deal_id: str) -> str:
         logger.warning("Failed to compute insights for chat context: %s", exc)
         return ""
 
-    lines = ["## AI Deal Insights"]
+    lines = [
+        "## AI Deal Insights & Risk Scoring",
+        "",
+        "### Methodology",
+        "The Deal Risk Score is computed using a three-dimension weighted model:",
+        "  1. **Completeness Score** (30% weight) — measures % of expected deal documents present,",
+        "     tiered by criticality (Tier 1 critical: legal title, leases, financials;",
+        "     Tier 2 important: building survey, valuations; Tier 3 standard: planning, env reports).",
+        "  2. **Lease Risk Score** (45% weight) — computed from WAULT (Weighted Average Unexpired",
+        "     Lease Term) with a non-linear decay curve, adjusted for break option exposure,",
+        "     void rates, tenant distress signals (CVA/administration), and near-term expiry concentration.",
+        "  3. **Financial Risk Score** (25% weight) — assesses DSCR (Debt Service Cover Ratio),",
+        "     NOI trajectory, valuation recency, and rent passing vs ERV gap.",
+        "  Circuit breakers cap the maximum score in extreme cases: zero leases (cap 15),",
+        "  WAULT < 6 months (cap 30), missing legal documents (cap 25).",
+        "",
+    ]
 
     # Risk score
     score = insights.get("risk_score", 0)
     band = insights.get("risk_band", {})
-    lines.append(f"\n**Deal Risk Score: {score:.0f}/100 — {band.get('label', 'Unknown')}**")
+    lines.append(f"### Deal Risk Score: {score:.0f}/100 — {band.get('label', 'Unknown')}")
+    lines.append(f"Band: {band.get('description', '')}")
+    lines.append("")
 
     # Dimension breakdown
     dims = insights.get("dimensions", {})
-    for key, dim in dims.items():
-        lines.append(f"  - {dim['label']}: {dim['score']:.0f}/100 (weight: {dim['weight']:.0%})")
+    if dims:
+        lines.append("### Dimension Breakdown")
+        for key, dim in dims.items():
+            lines.append(f"  - {dim['label']}: {dim['score']:.0f}/100 (weight: {dim['weight']:.0%}, weighted contribution: {dim['score'] * dim['weight']:.1f} pts)")
+        lines.append("")
 
     # WAULT
     wault = insights.get("wault")
     if wault is not None:
-        lines.append(f"\n**WAULT (Weighted Average Unexpired Lease Term): {wault:.1f} years**")
+        lines.append(f"### WAULT: {wault:.2f} years")
+        lines.append("  (Weighted Average Unexpired Lease Term — each lease weighted by its passing rent)")
+        lines.append("")
 
     # Circuit breakers
     breakers = insights.get("circuit_breakers", [])
     if breakers:
-        lines.append("\n### Circuit Breakers (Critical Overrides)")
+        lines.append("### Circuit Breakers Triggered")
         for b in breakers:
-            lines.append(f"  ⚠ {b['message']}")
+            lines.append(f"  ⚠ [{b.get('type','').upper()}] {b['message']} → score capped at {b.get('cap', '?')}")
+        lines.append("")
 
     # Top risk drivers
     drivers = insights.get("risk_drivers", [])
     if drivers:
-        lines.append("\n### Key Risk Signals")
-        for d in drivers[:7]:
+        lines.append("### Key Risk Signals (algorithmic detections)")
+        for d in drivers[:8]:
             icon = "🔴" if d["severity"] == "critical" else "🟡" if d["severity"] == "warning" else "🟢" if d["severity"] == "positive" else "ℹ️"
-            lines.append(f"  {icon} {d['message']}")
+            lines.append(f"  {icon} [{d['severity'].upper()}] {d['message']}")
+        lines.append("")
 
     # What's missing
     missing = insights.get("missing_items", [])
     if missing:
-        lines.append("\n### What's Missing")
+        lines.append("### What's Missing (checklist of expected documents)")
+        lines.append("  Tier 1 = Critical (blocks deal); Tier 2 = Important; Tier 3 = Standard")
         for m in missing:
             tier_label = {1: "CRITICAL", 2: "IMPORTANT", 3: "STANDARD"}.get(m["tier"], "")
-            lines.append(f"  - [{tier_label}] {m['message']}")
+            lines.append(f"  - [Tier {m['tier']} — {tier_label}] {m['message']}")
+        lines.append("")
+
+    # Lease chain summary
+    lease_chains = insights.get("lease_chain_summary")
+    if lease_chains:
+        lines.append("### Lease Amendment Chain Analysis")
+        lines.append("  Built using regex document classification + Levenshtein fuzzy tenant matching.")
+        lines.append(f"  - Total chains: {lease_chains.get('total_chains', 0)}")
+        lines.append(f"  - Chains with base lease: {lease_chains.get('with_base_lease', 0)}")
+        lines.append(f"  - Orphaned amendments (no base lease): {lease_chains.get('orphaned_count', 0)}")
+        lines.append("")
 
     # Expiry timeline
     timeline = insights.get("expiry_timeline", [])
     if timeline and any(b["count"] > 0 for b in timeline):
-        lines.append("\n### Lease Expiry Timeline")
+        lines.append("### Lease Expiry Timeline (% of passing rent)")
         for b in timeline:
             if b["count"] > 0:
                 bar = "█" * max(1, int(b["pct"] / 5))
-                lines.append(f"  {b['label']} ({b['period']}): {b['pct']:.0f}% of rent, {b['count']} lease(s) {bar}")
+                lines.append(f"  {b['label']} ({b['period']}): {b['pct']:.0f}% of rent — {b['count']} lease(s) {bar}")
+        lines.append("")
 
-    lines.append("")
     return "\n".join(lines)
 
 

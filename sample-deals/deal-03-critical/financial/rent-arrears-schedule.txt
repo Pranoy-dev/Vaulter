@@ -1,0 +1,119 @@
+RENT ARREARS SCHEDULE AND DEBT RECOVERY SUMMARY
+==================================================
+Prepared by : Turnaround Advisory Partners LLP (Joint Administrators)
+Property    : Parkway Retail Centre, Stockport, SK1 3UA
+As at       : 28 February 2026
+
+This schedule summarises all outstanding rent arrears, deposits held,
+and recovery actions across all five units.
+
+═══════════════════════════════════════════════════════════════════════════
+UNIT 1 — FashionZone Ltd (CVA)
+═══════════════════════════════════════════════════════════════════════════
+Lease: 1 Oct 2016 – 30 Sep 2026 (10y)
+Current status: Trading under CVA (Cat B store — 30% rent reduction)
+
+Pre-CVA arrears:
+  Nov 2025 instalment (quarterly)        : £91,000 — unpaid
+  Dec 2025 adjustments                   : — (rent demand issued)
+  Jan 2026 instalment                    : £91,000 — unpaid (partial)
+  Sub-total pre-CVA arrears              : £62,300 (net of deposit applied)
+
+Deposit:
+  Original deposit held                  : £91,000
+  Applied to Q4 2025 arrears            : -£91,000
+  Current deposit balance               : £nil
+
+CVA treatment:
+  Pre-CVA arrears of £62,300 — ranks as unsecured CVA debt
+  Projected CVA dividend: 15p in £ = £9,345
+  Expected recovery timeline: 24 months from CVA commencement
+
+Post-CVA rent (current):
+  Feb 2026 onwards                       : £21,233.33 per month
+  Status: Feb 2026 payment RECEIVED (on time)
+
+═══════════════════════════════════════════════════════════════════════════
+UNIT 2 — NewPrint Ltd
+═══════════════════════════════════════════════════════════════════════════
+Lease: 1 Jul 2023 – 30 Jun 2026 (3y)
+Current status: Paying — no arrears
+
+Arrears: £nil
+Deposit held: £11,550 (3 months)
+All quarterly payments current through Q1 2026.
+
+═══════════════════════════════════════════════════════════════════════════
+UNIT 3 — Footlocker Sports Ltd (VACATED)
+═══════════════════════════════════════════════════════════════════════════
+Lease: 1 Jan 2021 – 31 Dec 2025 (renewal of original 2016 lease)
+Vacated: 31 December 2025 (lease expired by effluxion)
+
+Terminal dilapidations claim:
+  Schedule served: 15 December 2025
+  Claim amount: £28,400 (reinstatement of shopfront, internal repairs,
+    removal of signage, deep clean)
+  Tenant response: Disputed quantum (offered £12,000)
+  Settlement: Agreed at £18,500 on 20 February 2026
+  Payment received: PENDING (due 28 March 2026)
+
+Rent arrears: £nil (all rent paid to expiry including final quarter deposit offset)
+Deposit: £31,200 — applied to final quarter's rent. Balance: £nil.
+
+═══════════════════════════════════════════════════════════════════════════
+UNIT 4 — HomeStyle Ltd (FORFEITED)
+═══════════════════════════════════════════════════════════════════════════
+Lease: 1 Apr 2019 (original lease NOT in data room)
+Forfeited: 11 August 2025
+
+Rent arrears at forfeiture:
+  Q3 2024 (Jul–Sep 2024)                : £22,400
+  Q4 2024 (Oct–Dec 2024)                : £22,400
+  Q1 2025 (Jan–Mar 2025)                : £22,400
+  Partial credit (insurance refund)      : -£4,600
+  Crown preference (HMRC)               : -£14,400
+  Sub-total unsecured claim             : £48,200
+
+Deposit: £22,400 (originally held)
+  Applied to Q2 2024 rent shortfall      : -£22,400
+  Balance                               : £nil
+
+Recovery:
+  County Court judgment (SK-2025-04421)  : Costs of £4,200 awarded
+  Enforcement: Nil return — HomeStyle has no assets to satisfy judgment
+  WRITTEN OFF: £48,200 + £4,200 costs = £52,400 irrecoverable
+
+═══════════════════════════════════════════════════════════════════════════
+UNIT 5 — CafeChain Ltd (SURRENDERED)
+═══════════════════════════════════════════════════════════════════════════
+Lease: 1 Oct 2020 – 30 Sep 2025 (original lease NOT in data room)
+Surrendered: 31 March 2025 (by Deed of Surrender dated 28 February 2025)
+
+Surrender premium received: £8,500
+Rent paid to surrender date: Confirmed (Q1 2025 instalment received)
+Deposit: £11,700 — returned in full 14 April 2025
+Arrears: £nil
+Dilapidations: Waived per Deed of Surrender
+
+═══════════════════════════════════════════════════════════════════════════
+AGGREGATE POSITION
+═══════════════════════════════════════════════════════════════════════════
+Total outstanding rent arrears (gross)   : £110,500
+  of which:
+    Recoverable via CVA (FashionZone)    : £  9,345 (projected)
+    Recoverable via settlement (Footlk.) : £ 18,500 (pending)
+    Written off (HomeStyle)              : -£52,400
+    No arrears (NewPrint, CafeChain)     : £nil
+
+Total deposits currently held            : £ 11,550 (NewPrint only)
+Total deposits applied / returned        : £156,300 (across all units)
+
+Net irrecoverable loss (estimated)       : £ 82,655
+
+Note: These arrears are obligations of Parkway Retail Fund Ltd (In
+Administration). Recovery actions are managed by the Joint Administrators
+for the benefit of the Company's creditors.
+
+Prepared by: P. Enright, Joint Administrator
+Reviewed by: D. Walsh, Joint Administrator
+Date: 28 February 2026

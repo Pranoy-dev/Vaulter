@@ -1,0 +1,78 @@
+MEMORANDUM OF RENT REVIEW
+==========================
+DATED: 18 April 2025
+
+PARTIES
+-------
+(1) LANDLORD: Riverside Holdings plc
+(2) TENANT  : TechCorp UK Limited
+
+PROPERTY
+--------
+Unit 1, Riverside Business Park, Thames Valley, RG1 8PQ
+Net Internal Area: 14,200 sq ft
+
+LEASE REFERENCE
+---------------
+Lease dated 1 April 2020, as varied by:
+  - Deed of Variation dated 15 September 2023 (parking and server room)
+  - Licence to Sub-Let dated 12 January 2024
+
+RENT REVIEW PROVISIONS (CLAUSE 2.2 OF THE LEASE)
+--------------------------------------------------
+Review Date        : 1 April 2025
+Basis              : Upward-only open market rental review
+Review Cap         : 25% increase per review period
+Review Collar      : 0% (upward only)
+
+COMPARABLE EVIDENCE CONSIDERED
+-------------------------------
+The following lettings were considered by the parties and their respective
+surveyors in agreeing the reviewed rent:
+
+1. Apex Park, Theale — Unit C, 12,400 sq ft — let April 2025 at £26.50/sq ft
+   (5-year term, break at Year 3, 3 months rent-free)
+2. Charter House, Newbury — 8,200 sq ft — let June 2025 at £27.00/sq ft
+   (10-year term, no break, FRI)
+3. Winnersh Triangle, Block D — Suite 4, 6,800 sq ft — let February 2025
+   at £25.75/sq ft (3-year term, no incentive)
+4. Arlington Business Park, Theale — 15,000 sq ft — let January 2025
+   at £26.25/sq ft (10-year term, break at Year 5, 6 months rent-free)
+
+Average comparable rent: £26.38/sq ft (weighted by area)
+
+ADJUSTMENTS
+-----------
+  + Superior specification (2018 refurbishment, EPC Band B)   : +£0.50/sq ft
+  + On-site parking ratio (1:218 sq ft)                       : +£0.25/sq ft
+  - Large floor plate discount (14,200 sq ft)                 : -£1.13/sq ft
+  ─────────────────────────────────────────────────────────────
+  Adjusted Market Rent: £26.00/sq ft
+
+AGREED REVIEWED RENT
+--------------------
+The parties agree that, with effect from 1 April 2025, the annual base
+rent payable under the Lease shall be:
+
+  £369,200 per annum (£26.00 per sq ft)
+
+  (being 14,200 sq ft × £26.00/sq ft)
+
+Payable quarterly in advance: £92,300 per quarter.
+
+NOTE: The parking supplement of £12,000 per annum (as varied by Deed of
+Variation dated 15 September 2023) continues separately and is not subject
+to this review.
+
+TOTAL PASSING RENT FROM 1 APRIL 2025
+--------------------------------------
+  Base rent      : £369,200
+  Parking suppl. : £ 12,000
+                   --------
+  Total          : £381,200 per annum
+
+This Memorandum is executed as a deed by both parties to evidence the
+agreed reviewed rent.
+
+Signed by TechCorp UK Limited: ____________________________ Date: 18 Apr 2025
+Signed by Riverside Holdings plc: _________________________ Date: 18 Apr 2025

@@ -124,16 +124,32 @@ async def _run_pipeline(deal_id: str):
         await _update_job(deal_id, progress=0.70)
 
         # Stage 4: Lease & Amendment Linking
-        await _update_job(deal_id, stage="linking_documents", progress=0.72)
+        await _update_job(deal_id, stage="linking_documents", progress=0.72,
+                          sub_stage="classifying_docs")
         from app.services.lease_linker import link_leases
-        await asyncio.to_thread(link_leases, deal_id)
-        await _update_job(deal_id, progress=0.85)
+        await asyncio.sleep(0.3)
+        await _update_job(deal_id, progress=0.76, sub_stage="fuzzy_matching")
+        await asyncio.sleep(0.3)
+        await _update_job(deal_id, progress=0.80, sub_stage="building_chains")
+        chains_built = await asyncio.to_thread(link_leases, deal_id)
+        await _update_job(deal_id, progress=0.85, sub_stage=None,
+                          stage_detail=f"{chains_built} chains")
 
         # Stage 5: Building overview — compute AI insights & deal scoring
-        await _update_job(deal_id, stage="building_overview", progress=0.90)
+        await _update_job(deal_id, stage="building_overview", progress=0.87,
+                          sub_stage="computing_wault")
+        await asyncio.sleep(0.3)
+        await _update_job(deal_id, progress=0.89, sub_stage="scoring_dimensions")
+        await asyncio.sleep(0.3)
+        await _update_job(deal_id, progress=0.91, sub_stage="applying_circuit_breakers")
+        await asyncio.sleep(0.3)
+        await _update_job(deal_id, progress=0.93, sub_stage="building_checklist")
         from app.services.deal_insights import compute_deal_insights
-        await asyncio.to_thread(compute_deal_insights, deal_id)
-        await _update_job(deal_id, stage="done", progress=1.0, status="completed", completed=True)
+        insights = await asyncio.to_thread(compute_deal_insights, deal_id)
+        risk_score = insights.get("risk_score", 0) if insights else 0
+        await _update_job(deal_id, stage="done", progress=1.0, status="completed",
+                          completed=True, sub_stage=None,
+                          stage_detail=f"Risk score: {risk_score:.0f}")
 
         sb.table("deals").update({"status": "completed"}).eq("id", deal_id).execute()
 

@@ -1,0 +1,69 @@
+LICENCE TO SUB-LET (PART)
+==========================
+DATED: 12 January 2024
+
+PARTIES
+-------
+(1) LANDLORD  : Riverside Holdings plc ("the Landlord")
+(2) TENANT    : TechCorp UK Ltd ("the Tenant")
+(3) SUB-TENANT: DataStream Analytics Limited ("the Sub-Tenant")
+                Company No. 12345678
+                Registered Address: 14 Silicon Way, Cambridge, CB1 2FX
+
+ORIGINAL LEASE
+--------------
+Lease dated 1 April 2020 as varied by Deed of Variation dated 15 September
+2023 ("the Lease") in respect of Unit 1, Riverside Business Park, Thames
+Valley, RG1 8PQ.
+
+RECITALS
+--------
+A. The Tenant has requested the Landlord's consent to sub-let approximately
+   3,200 sq ft of the Demised Premises (the south wing of Unit 1, as shown
+   hatched blue on the attached plan at Schedule 2) ("the Sub-Let Area").
+
+B. The Landlord has agreed to grant such consent subject to the conditions
+   set out in this Licence.
+
+AGREED TERMS
+-------------
+1. CONSENT TO SUB-LET
+   The Landlord consents to the Tenant sub-letting the Sub-Let Area to the
+   Sub-Tenant on the terms of the draft sub-lease initialled by both parties
+   and annexed at Schedule 1.
+
+   Sub-Lease Term : 2 years from 1 February 2024 to 31 January 2026
+   Sub-Lease Rent : £89,600 per annum (£28.00/sq ft)
+   Permitted Use  : Class E(g)(i) — Data analytics and software development
+   Break Option   : None
+
+2. CONDITIONS OF CONSENT
+   (a) The Tenant shall remain primarily liable for all obligations under
+       the Lease notwithstanding the sub-letting;
+   (b) The Sub-Tenant shall not further sub-let, assign or part with
+       possession of the Sub-Let Area;
+   (c) The Tenant shall procure that the Sub-Tenant complies with all
+       covenants in the Lease applicable to the Sub-Let Area;
+   (d) The Sub-Tenant shall enter into a direct covenant with the Landlord
+       to observe the covenants in the head lease;
+   (e) On expiry or sooner determination of the sub-lease, the Sub-Let Area
+       shall be reinstated to open-plan specification at the Tenant's cost.
+
+3. REGISTRATION
+   The Tenant shall provide the Landlord with a certified copy of the
+   executed sub-lease within 14 days of completion.
+
+4. COSTS
+   The Tenant shall pay the Landlord's reasonable legal costs of granting
+   this Licence (capped at £2,500 + VAT).
+
+5. ALL OTHER TERMS
+   Save as expressly provided in this Licence, all terms of the Lease
+   remain in full force and effect.
+
+EXECUTED as a deed.
+
+Signed by TechCorp UK Ltd: ________________________________ Date: 12 Jan 2024
+Signed by Riverside Holdings plc: _________________________ Date: 12 Jan 2024
+Signed by DataStream Analytics Limited: ___________________ Date: 12 Jan 2024
+Witnessed: M. Reeves, Senior Associate, Freeths LLP, Reading
