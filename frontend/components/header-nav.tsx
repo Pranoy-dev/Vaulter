@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -9,14 +9,16 @@ export function HeaderNav({
   projectTitle,
   onBack,
 }: {
-  projectTitle?: string
+  projectTitle?: string | null
   onBack?: () => void
 }) {
+  const inProject = onBack !== undefined
+
   return (
     <header className="relative flex h-11 shrink-0 items-center border-b border-border/60 bg-background/80 backdrop-blur-sm px-3">
       {/* Left: back button or brand */}
       <div className="flex items-center gap-2 z-10">
-        {projectTitle && onBack ? (
+        {inProject ? (
           <Button
             type="button"
             variant="ghost"
@@ -32,12 +34,16 @@ export function HeaderNav({
         )}
       </div>
 
-      {/* Center: project title (absolute so it stays centered) */}
-      {projectTitle && (
+      {/* Center: project title or spinner */}
+      {inProject && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="max-w-xs truncate text-sm font-semibold tracking-tight">
-            {projectTitle}
-          </span>
+          {projectTitle ? (
+            <span className="max-w-xs truncate text-sm font-semibold tracking-tight">
+              {projectTitle}
+            </span>
+          ) : (
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          )}
         </div>
       )}
 

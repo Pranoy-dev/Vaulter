@@ -1887,11 +1887,10 @@ export type ProjectSetupScreenProps = {
   dealId: string | null
   projectTitle: string
   hasCompany: boolean
-  isNewProject?: boolean
   onBack: () => void
 }
 
-export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProject = false, onBack }: ProjectSetupScreenProps) {
+export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }: ProjectSetupScreenProps) {
   const { getToken } = useAuth()
   const [section, setSection] = React.useState<SetupSection>("upload")
   const [chatOpen, setChatOpen] = React.useState(true)
@@ -2113,7 +2112,8 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
         }
         return merged
       })
-      setShowDropzone(false)
+      // Don't hide dropzone immediately — the "Hide dropzone if project has files" effect
+      // will take care of it once dealData finishes refreshing.
       dealData.silentRefresh()
       toast.success(
         `Upload complete — ${result.filesUploaded} file${result.filesUploaded !== 1 ? "s" : ""} uploaded`,
@@ -2143,8 +2143,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
     if (fileInputSingleRef.current) fileInputSingleRef.current.value = ""
   }
 
-  // Reset dropzone state when switching projects
+  // Reset dropzone state when switching projects (preserve initialFiles on first mount)
+  const hasMountedRef = React.useRef(false)
   React.useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
     setShowDropzone(true)
     setSelectedFiles([])
     setOverwriteSet(new Set())
@@ -2163,15 +2168,14 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
 
   const isUploading = ["initializing", "uploading", "completing", "detecting-duplicates"].includes(uploadProgress.state)
 
-  // Show a full-screen loader on the very first load of any existing project.
-  // New projects (just created) skip the loader and go straight to the empty upload tab.
+  // Show full-screen loader on first load
   const hasLoadedOnce = React.useRef(false)
   if (!dealData.loading) hasLoadedOnce.current = true
-  if (!isNewProject && dealData.loading && !hasLoadedOnce.current) {
+  if (dealData.loading && !hasLoadedOnce.current) {
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
         <Loader2 className="size-7 animate-spin" />
-        <p className="text-sm">Loading project…</p>
+        <p className="text-sm">Retrieving project…</p>
       </div>
     )
   }
@@ -2216,12 +2220,12 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
             {/* Drag handle on the right border */}
             <div
               onMouseDown={startDrag}
-              className="absolute top-0 right-0 z-10 hidden h-full w-3 cursor-col-resize md:flex"
+              className="absolute top-0 right-0 z-10 hidden h-full w-3 cursor-ew-resize md:flex items-center justify-center group/handle"
               aria-hidden
             >
-              <div className="m-auto flex h-16 w-full items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100">
-                <GripVertical className="size-4 text-foreground/30" />
-              </div>
+              <GripVertical
+                className="absolute size-4 text-slate-500 dark:text-slate-400 opacity-0 transition-opacity duration-150 group-hover/handle:opacity-100"
+              />
             </div>
             <CardContent className="flex min-h-0 flex-1 flex-col gap-0 p-0">
               <header className="flex shrink-0 items-center gap-2 border-b border-border/50 px-2 py-2.5 md:px-3">
@@ -2366,13 +2370,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                   onChange={onInputChange}
                 />
 
-                {/* Step 1: Loading state — skipped when dropzone is shown (new/empty project) */}
-                {dealData.loading && !showDropzone ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
-                    <Loader2 className="size-5 animate-spin" />
-                    <span>Loading files…</span>
-                  </div>
-                ) : !hasCompany ? (
+                {!hasCompany ? (
                   <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 py-12 text-center">
                     <Building2 className="size-8 text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">
@@ -2464,7 +2462,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, isNewProj
                             <Button
                               size="sm"
                               variant="default"
-                              className="h-8 gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white border-0"
+                              className="h-8 gap-1.5 text-xs"
                               onClick={resetUpload}
                             >
                               <Plus className="size-4" />

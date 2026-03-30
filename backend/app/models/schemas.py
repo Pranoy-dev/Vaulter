@@ -84,6 +84,7 @@ class ProcessingStage(str, Enum):
 
 class DealCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
 
 
 class DealResponse(BaseModel):

@@ -75,10 +75,12 @@ async def create_deal(body: DealCreate, clerk_user_id: str = Depends(get_current
         if existing.data:
             raise HTTPException(status_code=409, detail=f'A project named "{body.name.strip()}" already exists.')
 
-        insert_data = {
+        insert_data: dict = {
             "user_id": str(user_id),
             "name": body.name.strip(),
         }
+        if body.description is not None:
+            insert_data["description"] = body.description.strip() or None
         if company_id:
             insert_data["company_id"] = company_id
         result = sb.table("deals").insert(insert_data).execute()

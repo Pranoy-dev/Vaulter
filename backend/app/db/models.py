@@ -97,6 +97,7 @@ class Deal(Base):
         nullable=False,
         server_default="created",
     )
+    description = Column(Text, nullable=True)
     file_count = Column(Integer, default=0)
     total_size = Column(BigInteger, default=0)
     skipped_files = Column(JSONB, nullable=True, default=list)
