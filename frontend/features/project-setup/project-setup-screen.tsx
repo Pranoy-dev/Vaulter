@@ -39,6 +39,7 @@ import {
   ExternalLink,
   Eye,
   File as FileIcon,
+  FileText,
   Files,
   Shield,
   Trash2,
@@ -60,12 +61,11 @@ import {
   Users,
   X,
 } from "lucide-react"
-import type { FileEntry, UploadProgress } from "@/lib/chunked-upload"
+import type { DealInsights, DocumentInsight } from "@/hooks/use-deal-insights"
 import { uploadFiles, isSupported } from "@/lib/chunked-upload"
 import { toast } from "sonner"
 import { useDealData } from "@/hooks/use-deal-data"
 import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-data"
-import { useDealInsights } from "@/hooks/use-deal-insights"
 import { useClassifications } from "@/hooks/use-classifications"
 import type { Classification } from "@/hooks/use-classifications"
 import { useProcessingStatus, stageStatus } from "@/hooks/use-processing-status"
@@ -576,10 +576,153 @@ function LoadingRows() {
   )
 }
 
-function AiInsightsPanel({ dealId, documents, loading }: { dealId: string | null; documents: DealDocument[]; loading: boolean }) {
-  const { insights, loading: insightsLoading } = useDealInsights(dealId)
+function DocSummariesBlock({
+  byCategory,
+  sortedCats,
+  totalDocs,
+  processedDocs,
+  countMap,
+  totalBreakdown,
+}: {
+  byCategory: Record<string, DocumentInsight[]>
+  sortedCats: string[]
+  totalDocs: number
+  processedDocs: number
+  countMap: Record<string, number>
+  totalBreakdown: number
+}) {
+  const [expandedCats, setExpandedCats] = React.useState<Set<string>>(new Set())
+  const allOpen = sortedCats.every((c) => expandedCats.has(c))
 
-  if (loading || insightsLoading) return <LoadingRows />
+  function toggleHeader() {
+    setExpandedCats(allOpen ? new Set() : new Set(sortedCats))
+  }
+
+  function toggleCat(cat: string) {
+    setExpandedCats((prev) => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
+
+  const FILL: Record<string, string> = {
+    leases_amendments: "bg-blue-500/15 dark:bg-blue-400/10",
+    financial: "bg-emerald-500/15 dark:bg-emerald-400/10",
+    technical_environmental: "bg-orange-500/15 dark:bg-orange-400/10",
+    corporate_legal: "bg-purple-500/15 dark:bg-purple-400/10",
+    other: "bg-zinc-500/10 dark:bg-zinc-400/10",
+  }
+  const ACCENT: Record<string, string> = {
+    leases_amendments: "bg-blue-500 dark:bg-blue-400",
+    financial: "bg-emerald-500 dark:bg-emerald-400",
+    technical_environmental: "bg-orange-500 dark:bg-orange-400",
+    corporate_legal: "bg-purple-500 dark:bg-purple-400",
+    other: "bg-zinc-400 dark:bg-zinc-500",
+  }
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      {/* Header */}
+      <button
+        type="button"
+        onClick={toggleHeader}
+        className="flex w-full items-center gap-2 bg-muted/60 px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+      >
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <span>Document Summaries</span>
+        <span className="ml-auto flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+          {totalDocs} docs
+          <ChevronRight className={`size-3.5 transition-transform duration-200 ${allOpen ? "rotate-90" : ""}`} />
+        </span>
+      </button>
+
+      {/* Category rows */}
+      <div className="divide-y divide-border/40">
+        {sortedCats.map((cat) => {
+          const docs = byCategory[cat]
+          const count = countMap[cat] ?? docs.length
+          const pct = Math.round((count / totalBreakdown) * 100)
+          const colorClass = CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other
+          const fillClass = FILL[cat] ?? FILL.other
+          const accentClass = ACCENT[cat] ?? ACCENT.other
+          const label = CATEGORY_LABELS[cat] ?? cat
+          const isOpen = expandedCats.has(cat)
+          return (
+            <div key={cat}>
+              {/* Category row with fill bar */}
+              <button
+                type="button"
+                onClick={() => toggleCat(cat)}
+                className="relative w-full overflow-hidden hover:brightness-95 transition-all"
+              >
+                {/* Fill bar */}
+                <div
+                  className={`absolute inset-y-0 left-0 ${fillClass} transition-all duration-500`}
+                  style={{ width: `${pct}%` }}
+                />
+                <div className="relative flex items-center gap-3 px-3 py-2.5">
+                  <ChevronRight className={`size-4 shrink-0 text-muted-foreground/50 transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`} />
+                  <div className={`size-2 shrink-0 rounded-full ${accentClass}`} />
+                  <span className="flex-1 text-xs font-medium text-left">{label}</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">{pct}%</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${colorClass}`}>{count}</span>
+                </div>
+              </button>
+
+              {/* Doc cards */}
+              {isOpen && (
+                <div className="ml-5 border-l-2 border-border/40 pl-3 space-y-1.5 py-2 pr-2">
+                  {docs.map((doc) => (
+                    <div key={doc.id} className="rounded-lg border border-border/50 bg-card px-3 py-2 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <FileIcon className="size-3 shrink-0 text-muted-foreground/50" />
+                        <span className="text-[11px] font-semibold text-foreground truncate">{doc.filename}</span>
+                      </div>
+                      {doc.summary && (
+                        <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{doc.summary}</p>
+                      )}
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {doc.parties?.map((p) => (
+                          <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">{p}</span>
+                        ))}
+                        {doc.expiry_date && (
+                          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">Expires: {doc.expiry_date}</span>
+                        )}
+                        {doc.has_signature && (
+                          <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-950/30 dark:text-green-400">Signed</span>
+                        )}
+                        {doc.has_seal && (
+                          <span className="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] text-purple-700 dark:bg-purple-950/30 dark:text-purple-400">Sealed</span>
+                        )}
+                        {doc.is_incomplete && (
+                          <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700 dark:bg-red-950/30 dark:text-red-400">Incomplete</span>
+                        )}
+                      </div>
+                      {doc.key_terms && Object.keys(doc.key_terms).length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                          {Object.entries(doc.key_terms).slice(0, 6).map(([k, v]) => (
+                            <span key={k} className="text-[10px] text-muted-foreground">
+                              <span className="text-muted-foreground/60">{k.replace(/_/g, " ")}:</span> {v}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p className="px-3 py-1.5 text-[10px] text-muted-foreground/50 border-t border-border/30">{totalDocs} documents total · {processedDocs} processed</p>
+    </div>
+  )
+}
+
+function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: string | null; documents: DealDocument[]; loading: boolean; insights: DealInsights | null }) {
+  if (loading) return <LoadingRows />
   if (documents.length === 0)
     return <EmptyState icon={Sparkles} message="No documents yet — upload files to see AI insights." />
   if (!insights)
@@ -815,79 +958,33 @@ function AiInsightsPanel({ dealId, documents, loading }: { dealId: string | null
         </div>
       )}
 
-      {/* ── Category breakdown ── */}
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">By category</p>
-        {insights.category_breakdown.map(({ category: cat, count }) => (
-          <div
-            key={cat}
-            className="flex items-center justify-between rounded-lg border border-border/60 bg-background/60 px-3 py-2"
-          >
-            <span className="text-sm">{CATEGORY_LABELS[cat] ?? cat}</span>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other}`}>
-              {count}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Document summaries (collapsible) ── */}
-      {insights.document_insights.length > 0 && (
-        <Collapsible>
-          <CollapsibleTrigger asChild>
-            <button type="button" className="flex w-full items-center gap-1.5 rounded-lg border border-border/40 bg-background/40 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors">
-              <ChevronRight className="size-3.5 transition-transform [[data-state=open]>&]:rotate-90" />
-              Document summaries ({insights.document_insights.length})
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="mt-1 space-y-1">
-              {insights.document_insights.slice(0, 20).map((doc) => (
-                <div key={doc.id} className="rounded-lg border border-border/30 bg-background/30 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />
-                    <span className="text-[11px] font-medium truncate">{doc.filename}</span>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${CATEGORY_COLORS[doc.category] ?? CATEGORY_COLORS.other}`}>
-                      {CATEGORY_LABELS[doc.category] ?? doc.category}
-                    </span>
-                  </div>
-                  {doc.summary && (
-                    <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{doc.summary}</p>
-                  )}
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {doc.parties?.map((p) => (
-                      <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">{p}</span>
-                    ))}
-                    {doc.expiry_date && (
-                      <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
-                        Expires: {doc.expiry_date}
-                      </span>
-                    )}
-                    {doc.has_signature && (
-                      <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-950/30 dark:text-green-400">Signed</span>
-                    )}
-                    {doc.has_seal && (
-                      <span className="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] text-purple-700 dark:bg-purple-950/30 dark:text-purple-400">Sealed</span>
-                    )}
-                    {doc.is_incomplete && (
-                      <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700 dark:bg-red-950/30 dark:text-red-400">Incomplete</span>
-                    )}
-                  </div>
-                  {doc.key_terms && Object.keys(doc.key_terms).length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                      {Object.entries(doc.key_terms).slice(0, 6).map(([k, v]) => (
-                        <span key={k} className="text-[10px] text-muted-foreground">
-                          <span className="text-muted-foreground/60">{k.replace(/_/g, " ")}:</span> {v}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+      {/* ── Document summaries with category breakdown ── */}
+      {(() => {
+        const CAT_ORDER = ["leases_amendments", "financial", "technical_environmental", "corporate_legal", "other"]
+        const byCategory: Record<string, typeof insights.document_insights> = {}
+        for (const doc of insights.document_insights.slice(0, 20)) {
+          const cat = doc.category ?? "other"
+          if (!byCategory[cat]) byCategory[cat] = []
+          byCategory[cat].push(doc)
+        }
+        const sortedCats = Object.keys(byCategory).sort((a, b) => {
+          const ai = CAT_ORDER.indexOf(a); const bi = CAT_ORDER.indexOf(b)
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+        })
+        const totalBreakdown = insights.category_breakdown.reduce((s, c) => s + c.count, 0) || 1
+        const countMap: Record<string, number> = {}
+        for (const { category, count } of insights.category_breakdown) countMap[category] = count
+        return (
+          <DocSummariesBlock
+            byCategory={byCategory}
+            sortedCats={sortedCats}
+            totalDocs={insights.total_documents}
+            processedDocs={insights.processed_documents}
+            countMap={countMap}
+            totalBreakdown={totalBreakdown}
+          />
+        )
+      })()}
     </div>
   )
 }
@@ -2266,8 +2363,7 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
       </div>
 
       {/* ── Chain cards ── */}
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-2.5 pr-1">
+      <div className="space-y-2.5">
           {filteredChains.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
               <GitBranch className="size-5" />
@@ -2435,8 +2531,7 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
               )
             })
           )}
-        </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
@@ -3453,7 +3548,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               isDemoWorkspace ? (
                 <DemoAiInsightsPanel />
               ) : (
-                <AiInsightsPanel dealId={dealId} documents={dealData.documents} loading={dealData.loading} />
+                <AiInsightsPanel dealId={dealId} documents={dealData.documents} loading={dealData.loading} insights={(dealData.insights as DealInsights | null) ?? null} />
               )
             ) : null}
             {section === "file-structure" ? (
@@ -3529,19 +3624,25 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               if (!nextSec || !NextIcon) return null
               const dest = nextSec
               return (
-                <div className="flex justify-end pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 text-xs"
-                    onClick={() => setSection(dest)}
-                  >
-                    Next: {nextLabel}
-                    <NextIcon className="size-4" />
-                  </Button>
-                </div>
+                <>
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      onClick={() => setSection(dest)}
+                    >
+                      Next: {nextLabel}
+                      <NextIcon className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="h-16" aria-hidden />
+                </>
               )
             })()}
+
+            {/* ── Bottom spacer — ensures content can scroll to centre ── */}
+            <div className="h-[250px] shrink-0" aria-hidden />
 
           </div>
         </div>

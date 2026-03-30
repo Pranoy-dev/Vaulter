@@ -281,10 +281,20 @@ async def get_deal_insights(
     deal_id: uuid.UUID,
     clerk_user_id: str = Depends(get_current_user_id),
 ):
-    """Compute and return AI-powered deal insights including risk scoring."""
+    """Return AI-powered deal insights. Serves cached value from last processing run;
+    falls back to live computation only when no cache exists."""
     try:
         user_id = _resolve_user_id(clerk_user_id)
         _verify_deal_ownership(deal_id, user_id)
+
+        # Try cache first
+        sb = get_supabase()
+        row = sb.table("deals").select("insights_cache").eq("id", str(deal_id)).single().execute()
+        cached = row.data.get("insights_cache") if row.data else None
+        if cached:
+            return ApiResponse.ok(cached)
+
+        # No cache — compute live (first time, or pre-processing)
         insights = compute_deal_insights(str(deal_id))
         return ApiResponse.ok(insights)
     except HTTPException:

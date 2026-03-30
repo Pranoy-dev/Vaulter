@@ -147,6 +147,15 @@ async def _run_pipeline(deal_id: str):
         from app.services.deal_insights import compute_deal_insights
         insights = await asyncio.to_thread(compute_deal_insights, deal_id)
         risk_score = insights.get("risk_score", 0) if insights else 0
+
+        # Persist insights cache so GET /insights is instant (no recompute needed)
+        if insights:
+            from datetime import datetime, timezone as tz
+            sb.table("deals").update({
+                "insights_cache": insights,
+                "insights_cached_at": datetime.now(tz.utc).isoformat(),
+            }).eq("id", deal_id).execute()
+
         await _update_job(deal_id, stage="done", progress=1.0, status="completed",
                           completed=True, sub_stage=None,
                           stage_detail=f"Risk score: {risk_score:.0f}")

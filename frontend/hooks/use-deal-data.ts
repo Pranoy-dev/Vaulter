@@ -73,6 +73,7 @@ export interface DealData {
   documents: DealDocument[]
   duplicates: DuplicateGroup[]
   leaseChains: LeaseChain[]
+  insights: Record<string, unknown> | null
   skippedFiles: string[]
   loading: boolean
   /** refetch all data, shows loading spinner */
@@ -100,6 +101,7 @@ export function useDealData(dealId: string | null): DealData {
   const [documents, setDocuments] = React.useState<DealDocument[]>([])
   const [duplicates, setDuplicates] = React.useState<DuplicateGroup[]>([])
   const [leaseChains, setLeaseChains] = React.useState<LeaseChain[]>([])
+  const [insights, setInsights] = React.useState<Record<string, unknown> | null>(null)
   const [skippedFiles, setSkippedFiles] = React.useState<string[]>([])
   const [loading, setLoading] = React.useState(!!dealId)
   const [tick, setTick] = React.useState(0)
@@ -130,12 +132,17 @@ export function useDealData(dealId: string | null): DealData {
         `/api/deals/${dealId}`,
         tokenFn,
       ),
-    ]).then(([docsRes, dupsRes, chainsRes, dealRes]) => {
+      authedGet<Record<string, unknown>>(
+        `/api/deals/${dealId}/insights`,
+        tokenFn,
+      ),
+    ]).then(([docsRes, dupsRes, chainsRes, dealRes, insightsRes]) => {
       if (cancelled) return
       setDocuments(docsRes?.documents ?? [])
       setDuplicates(dupsRes?.groups ?? [])
       setLeaseChains(chainsRes?.chains ?? [])
       setSkippedFiles(dealRes?.skipped_files ?? [])
+      setInsights(insightsRes ?? null)
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -151,5 +158,5 @@ export function useDealData(dealId: string | null): DealData {
     setTick((t) => t + 1)
   }, [])
 
-  return { documents, duplicates, leaseChains, skippedFiles, loading, refresh, silentRefresh }
+  return { documents, duplicates, leaseChains, insights, skippedFiles, loading, refresh, silentRefresh }
 }
