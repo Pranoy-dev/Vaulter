@@ -583,6 +583,8 @@ function DocSummariesBlock({
   processedDocs,
   countMap,
   totalBreakdown,
+  onPreview,
+  loadingPreviewId,
 }: {
   byCategory: Record<string, DocumentInsight[]>
   sortedCats: string[]
@@ -590,6 +592,8 @@ function DocSummariesBlock({
   processedDocs: number
   countMap: Record<string, number>
   totalBreakdown: number
+  onPreview?: (docId: string, filename: string) => void
+  loadingPreviewId?: string | null
 }) {
   const [expandedCats, setExpandedCats] = React.useState<Set<string>>(new Set())
   const allOpen = sortedCats.every((c) => expandedCats.has(c))
@@ -674,10 +678,22 @@ function DocSummariesBlock({
               {isOpen && (
                 <div className="ml-5 border-l-2 border-border/40 pl-3 space-y-1.5 py-2 pr-2">
                   {docs.map((doc) => (
-                    <div key={doc.id} className="rounded-lg border border-border/50 bg-card px-3 py-2 shadow-sm">
+                    <div
+                      key={doc.id}
+                      className={`rounded-lg border border-border/50 bg-card px-3 py-2 shadow-sm ${onPreview ? "cursor-pointer hover:border-border hover:bg-muted/30 transition-colors" : ""}`}
+                      onClick={onPreview ? () => onPreview(doc.id, doc.filename) : undefined}
+                      role={onPreview ? "button" : undefined}
+                      tabIndex={onPreview ? 0 : undefined}
+                      onKeyDown={onPreview ? (e) => { if (e.key === "Enter" || e.key === " ") onPreview(doc.id, doc.filename) } : undefined}
+                    >
                       <div className="flex items-center gap-2">
                         <FileIcon className="size-3 shrink-0 text-muted-foreground/50" />
-                        <span className="text-[11px] font-semibold text-foreground truncate">{doc.filename}</span>
+                        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground">{doc.filename}</span>
+                        {onPreview && (
+                          loadingPreviewId === doc.id
+                            ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground/50" />
+                            : <Eye className="size-3 shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground" />
+                        )}
                       </div>
                       {doc.summary && (
                         <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{doc.summary}</p>
@@ -722,7 +738,7 @@ function DocSummariesBlock({
   )
 }
 
-function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: string | null; documents: DealDocument[]; loading: boolean; insights: DealInsights | null }) {
+function AiInsightsPanel({ dealId, documents, loading, insights, getToken }: { dealId: string | null; documents: DealDocument[]; loading: boolean; insights: DealInsights | null; getToken?: () => Promise<string | null> }) {
   if (loading) return <LoadingRows />
   if (documents.length === 0)
     return <EmptyState icon={Sparkles} message="No documents yet — upload files to see AI insights." />
@@ -762,7 +778,44 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (insights.risk_score / 100) * circumference
 
+  const [previewDoc, setPreviewDoc] = React.useState<{ url: string; title: string } | null>(null)
+  const [loadingPreviewId, setLoadingPreviewId] = React.useState<string | null>(null)
+
+  async function handlePreview(docId: string, filename: string) {
+    if (!dealId || !getToken) return
+    setLoadingPreviewId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}/download`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) { toast.error("Could not load file"); return }
+      const body = await res.json()
+      const url = body.data?.url
+      if (!url) { toast.error("Could not load file"); return }
+      setPreviewDoc({ url, title: filename })
+    } finally {
+      setLoadingPreviewId(null)
+    }
+  }
+
   return (
+    <>
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null) }}>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0" showCloseButton>
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-2 pr-8">
+              <DialogTitle className="truncate text-sm">{previewDoc?.title}</DialogTitle>
+              <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ExternalLink className="size-4" />Open in new tab
+              </a>
+            </div>
+          </DialogHeader>
+          <iframe src={previewDoc?.url} className="w-full border-0" style={{ height: "85vh" }} title={previewDoc?.title} />
+        </DialogContent>
+      </Dialog>
     <div className="space-y-3 pr-1">
       {/* ── Deal Risk Score ── */}
       <div className={`rounded-xl border border-border/70 ${RISK_BG_COLORS[insights.risk_band.color] ?? RISK_BG_COLORS.amber} p-4`}>
@@ -1022,10 +1075,13 @@ function AiInsightsPanel({ dealId, documents, loading, insights }: { dealId: str
             processedDocs={insights.processed_documents}
             countMap={countMap}
             totalBreakdown={totalBreakdown}
+            onPreview={getToken ? handlePreview : undefined}
+            loadingPreviewId={loadingPreviewId}
           />
         )
       })()}
     </div>
+    </>
   )
 }
 
@@ -1533,7 +1589,7 @@ function FileStructurePanel({
 
       {/* Preview dialog */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null) }}>
-        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0 overflow-hidden" showCloseButton>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0" showCloseButton>
           <DialogHeader className="px-4 pt-4 pb-2">
             <div className="flex items-center justify-between gap-2 pr-8">
               <DialogTitle className="truncate text-sm">{previewDoc?.title}</DialogTitle>
@@ -1788,7 +1844,7 @@ function DuplicationPanel({
 
       {/* File preview dialog */}
       <Dialog open={!!preview} onOpenChange={(open) => { if (!open) setPreview(null) }}>
-        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0 overflow-hidden" showCloseButton>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0" showCloseButton>
           <DialogHeader className="px-4 pt-4 pb-2">
             <div className="flex items-center justify-between gap-2 pr-8">
               <DialogTitle className="truncate text-sm">{preview?.title}</DialogTitle>
@@ -2338,8 +2394,30 @@ function ClassificationPanel({
   )
 }
 
-function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChain[]; documents: DealDocument[]; loading: boolean }) {
+function LeaseAmendmentPanel({ chains, documents, loading, dealId, getToken }: { chains: LeaseChain[]; documents: DealDocument[]; loading: boolean; dealId?: string | null; getToken?: () => Promise<string | null> }) {
   const [query, setQuery] = React.useState("")
+  const [previewDoc, setPreviewDoc] = React.useState<{ url: string; title: string } | null>(null)
+  const [loadingPreviewId, setLoadingPreviewId] = React.useState<string | null>(null)
+
+  async function handlePreview(docId: string, filename: string) {
+    if (!dealId || !getToken) return
+    setLoadingPreviewId(docId)
+    try {
+      const token = await getToken()
+      if (!token) return
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL ?? ""}/api/deals/${dealId}/documents/${docId}/download`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) { toast.error("Could not load file"); return }
+      const body = await res.json()
+      const url = body.data?.url
+      if (!url) { toast.error("Could not load file"); return }
+      setPreviewDoc({ url, title: filename })
+    } finally {
+      setLoadingPreviewId(null)
+    }
+  }
 
   if (loading) return <LoadingRows />
   if (chains.length === 0)
@@ -2389,6 +2467,20 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
   const totalDocs = chains.reduce((sum, c) => sum + c.documents.length, 0)
 
   return (
+    <>
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null) }}>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0" showCloseButton>
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-2 pr-8">
+              <DialogTitle className="truncate text-sm">{previewDoc?.title}</DialogTitle>
+              <a href={previewDoc?.url} target="_blank" rel="noopener noreferrer" className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ExternalLink className="size-4" />Open in new tab
+              </a>
+            </div>
+          </DialogHeader>
+          <iframe src={previewDoc?.url} className="w-full border-0" style={{ height: "85vh" }} title={previewDoc?.title} />
+        </DialogContent>
+      </Dialog>
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* ── Summary stats ── */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -2510,7 +2602,13 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
                                     <span className={`relative z-10 size-2.5 rounded-full ring-2 ring-background ${DOC_TYPE_DOT[doc.doc_type] ?? DOC_TYPE_DOT.unknown}`} />
                                   </div>
                                   {/* Card */}
-                                  <div className="min-w-0 flex-1 rounded-lg border border-border/40 bg-background px-3 py-2 shadow-sm">
+                                  <div
+                                    className={`min-w-0 flex-1 rounded-lg border border-border/40 bg-background px-3 py-2 shadow-sm ${getToken ? "cursor-pointer hover:border-border hover:bg-muted/30 transition-colors" : ""}`}
+                                    onClick={getToken ? () => handlePreview(doc.document_id, doc.filename ?? "Unknown") : undefined}
+                                    role={getToken ? "button" : undefined}
+                                    tabIndex={getToken ? 0 : undefined}
+                                    onKeyDown={getToken ? (e) => { if (e.key === "Enter" || e.key === " ") handlePreview(doc.document_id, doc.filename ?? "Unknown") } : undefined}
+                                  >
                                     <div className="flex items-center gap-2">
                                       {doc.doc_type === "base_lease" ? (
                                         <FileIcon className="size-3.5 shrink-0 text-blue-500" />
@@ -2522,6 +2620,9 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
                                       <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
                                         {doc.filename ?? "Unknown"}
                                       </span>
+                                      {loadingPreviewId === doc.document_id
+                                        ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground/50" />
+                                        : getToken ? <Eye className="size-3 shrink-0 text-muted-foreground/30" /> : null}
                                       {fullDoc?.has_signature && (
                                         <HoverTooltip content="Signed document">
                                           <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
@@ -2561,12 +2662,21 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
                                     <div className="flex w-6 shrink-0 justify-center pt-2.5">
                                       <span className="relative z-10 size-2.5 rounded-full bg-amber-400 ring-2 ring-background" />
                                     </div>
-                                    <div className="min-w-0 flex-1 rounded-lg border-2 border-amber-300/80 bg-amber-50/50 px-3 py-2 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/20">
+                                    <div
+                                      className={`min-w-0 flex-1 rounded-lg border-2 border-amber-300/80 bg-amber-50/50 px-3 py-2 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/20 ${getToken ? "cursor-pointer hover:brightness-95 transition-all" : ""}`}
+                                      onClick={getToken ? () => handlePreview(doc.document_id, doc.filename ?? "Unknown") : undefined}
+                                      role={getToken ? "button" : undefined}
+                                      tabIndex={getToken ? 0 : undefined}
+                                      onKeyDown={getToken ? (e) => { if (e.key === "Enter" || e.key === " ") handlePreview(doc.document_id, doc.filename ?? "Unknown") } : undefined}
+                                    >
                                       <div className="flex items-center gap-2">
                                         <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
                                         <span className="min-w-0 flex-1 truncate text-xs font-medium" title={doc.original_path ?? ""}>
                                           {doc.filename ?? "Unknown"}
                                         </span>
+                                        {loadingPreviewId === doc.document_id
+                                          ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground/50" />
+                                          : getToken ? <Eye className="size-3 shrink-0 text-muted-foreground/30" /> : null}
                                         {fullDoc?.has_signature && (
                                           <HoverTooltip content="Signed document">
                                             <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
@@ -2596,6 +2706,7 @@ function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChai
           )}
       </div>
     </div>
+    </>
   )
 }
 
@@ -2926,7 +3037,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
       </Dialog>
       {/* Upload card: file preview dialog */}
       <Dialog open={!!uploadPreview} onOpenChange={(open) => { if (!open) setUploadPreview(null) }}>
-        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0 overflow-hidden" showCloseButton>
+        <DialogContent className="w-[90vw] max-w-[1200px] sm:max-w-[1200px] p-0" showCloseButton>
           <DialogHeader className="px-4 pt-4 pb-2">
             <div className="flex items-center justify-between gap-2 pr-8">
               <DialogTitle className="truncate text-sm">{uploadPreview?.title}</DialogTitle>
@@ -2943,7 +3054,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
         {/* Chat panel — left side, collapsible */}
         {chatOpen ? (
           <Card
-            className="group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 overflow-hidden rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-border/50 md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)] transition-[width] duration-300 ease-in-out"
+            className="group relative flex min-h-0 w-full max-md:min-h-[min(42dvh,24rem)] flex-1 flex-col gap-0 rounded-none border-0 border-border/80 border-t bg-card py-0 shadow-none ring-0 ring-transparent md:flex-none md:self-stretch md:border-t-0 md:border-r md:border-border/50 md:rounded-none md:shadow-[2px_0_18px_-6px_rgba(0,0,0,0.12)] transition-[width] duration-300 ease-in-out"
             style={{ width: chatWidth }}
           >
             {/* Drag handle on the right border */}
@@ -3660,7 +3771,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               isDemoWorkspace ? (
                 <DemoAiInsightsPanel />
               ) : (
-                <AiInsightsPanel dealId={dealId} documents={dealData.documents} loading={dealData.loading} insights={(dealData.insights as DealInsights | null) ?? null} />
+                <AiInsightsPanel dealId={dealId} documents={dealData.documents} loading={dealData.loading} insights={(dealData.insights as DealInsights | null) ?? null} getToken={getToken ?? undefined} />
               )
             ) : null}
             {section === "file-structure" ? (
@@ -3706,7 +3817,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               isDemoWorkspace ? (
                 <DemoLeaseChainsPanel />
               ) : (
-                <LeaseAmendmentPanel chains={dealData.leaseChains} documents={dealData.documents} loading={dealData.loading} />
+                <LeaseAmendmentPanel chains={dealData.leaseChains} documents={dealData.documents} loading={dealData.loading} dealId={dealId} getToken={getToken ?? undefined} />
               )
             ) : null}
 
