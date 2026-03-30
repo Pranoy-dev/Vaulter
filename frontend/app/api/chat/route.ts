@@ -169,7 +169,7 @@ Platform Technology Overview (use this when users ask how classification, AI ins
 
 DOCUMENT CLASSIFICATION
 - Text is extracted from uploaded files (PDF, DOCX, XLSX, images via OCR).
-- Each document is embedded using a large language model (Google Gemini) which converts the full text into a high-dimensional semantic vector.
+- Each document is embedded using a large language model which converts the full text into a high-dimensional semantic vector.
 - Documents are classified into categories (Leases & Amendments, Financial, Technical/Environmental, Corporate & Legal, Other) by prompting the LLM with the extracted text and an in-context description of each category.
 - A confidence score (0–100%) is computed from the model's output certainty. Low-confidence documents are flagged for review.
 - Key metadata — parties, expiry dates, signatures, seals, incompleteness — are extracted in the same AI pass.
