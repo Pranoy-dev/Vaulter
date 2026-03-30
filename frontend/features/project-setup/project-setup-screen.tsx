@@ -3097,11 +3097,24 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     {processingJob.status === "running" && processingJob.currentStage === "linking_documents" ? (
                       <Loader2 className="ml-1 size-3 animate-spin text-primary/70" />
                     ) : dealData.leaseChains.length > 0 ? (
-                      <HoverTooltip content={`${dealData.leaseChains.length} lease chain${dealData.leaseChains.length !== 1 ? "s" : ""} detected. Each chain groups a base lease with its amendments and side letters by tenant.`}>
-                        <span className="ml-1 cursor-help rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
-                          {dealData.leaseChains.length}
-                        </span>
-                      </HoverTooltip>
+                      (() => {
+                        const total = dealData.leaseChains.length
+                        const clean = dealData.leaseChains.filter(c =>
+                          c.documents.every(d => !d.is_orphaned)
+                        ).length
+                        const badgeCls = clean === total
+                          ? "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400"
+                          : clean > 0
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                            : "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+                        return (
+                          <HoverTooltip content={`${clean} of ${total} lease chain${total !== 1 ? "s" : ""} are clean (no orphaned documents). Each chain groups a base lease with its amendments and side letters by tenant.`}>
+                            <span className={`ml-1 cursor-help rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${badgeCls}`}>
+                              {clean}/{total}
+                            </span>
+                          </HoverTooltip>
+                        )
+                      })()
                     ) : null}
                   </ToggleGroupItem>
                 </>
