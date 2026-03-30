@@ -680,7 +680,7 @@ function DocSummariesBlock({
                         <span className="text-[11px] font-semibold text-foreground truncate">{doc.filename}</span>
                       </div>
                       {doc.summary && (
-                        <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{doc.summary}</p>
+                        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{doc.summary}</p>
                       )}
                       <div className="mt-1 flex flex-wrap gap-1">
                         {doc.parties?.map((p) => (
@@ -700,11 +700,12 @@ function DocSummariesBlock({
                         )}
                       </div>
                       {doc.key_terms && Object.keys(doc.key_terms).length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
                           {Object.entries(doc.key_terms).slice(0, 6).map(([k, v]) => (
-                            <span key={k} className="text-[10px] text-muted-foreground">
-                              <span className="text-muted-foreground/60">{k.replace(/_/g, " ")}:</span> {v}
-                            </span>
+                            <div key={k} className="flex flex-col">
+                              <span className="text-[10px] font-medium text-muted-foreground/60 capitalize">{k.replace(/_/g, " ")}</span>
+                              <span className="text-[11px] text-foreground">{v}</span>
+                            </div>
                           ))}
                         </div>
                       )}
