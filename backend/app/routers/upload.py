@@ -308,7 +308,6 @@ async def upload_complete(
         sb.table("deals").update({
             "status": "uploaded",
             "file_count": uploaded_count,
-            "total_size": total_size,
             "skipped_files": skipped_list,
         }).eq("id", str(deal_id)).execute()
 

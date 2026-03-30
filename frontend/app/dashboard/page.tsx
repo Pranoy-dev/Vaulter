@@ -22,7 +22,7 @@ import { useAuth } from "@clerk/nextjs"
 import { apiFetch } from "@/lib/api-client"
 import { useUserSync } from "@/hooks/use-user-sync"
 import { toast } from "sonner"
-import { ArrowLeft, CheckCircle2, FileIcon, FolderUp, HardDriveIcon, Loader2, PlusIcon, SearchIcon, Trash2 } from "lucide-react"
+import { ArrowLeft, CalendarIcon, CheckCircle2, FileIcon, FolderUp, Loader2, PlusIcon, SearchIcon, Trash2 } from "lucide-react"
 import { uploadFiles, type FileEntry } from "@/lib/chunked-upload"
 import { Progress } from "@/components/ui/progress"
 
@@ -32,12 +32,8 @@ function toPascalCase(str: string) {
   return str.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1))
 }
 
-function formatBytes(bytes: number) {
-  if (!bytes || bytes === 0) return "0 B"
-  const mb = bytes / (1024 * 1024)
-  if (mb < 1) return `${(bytes / 1024).toFixed(1)} KB`
-  if (mb < 1024) return `${mb.toFixed(1)} MB`
-  return `${(mb / 1024).toFixed(1)} GB`
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
 }
 
 const CARD_ACCENTS = [
@@ -56,7 +52,6 @@ interface Deal {
   name: string
   description?: string | null
   file_count: number
-  total_size: number
   created_at: string
 }
 
@@ -352,8 +347,8 @@ function ProjectCard({
             {deal.file_count ?? 0} docs
           </span>
           <span className="flex items-center gap-1.5">
-            <HardDriveIcon className="size-3.5 shrink-0" />
-            {formatBytes(deal.total_size ?? 0)}
+            <CalendarIcon className="size-3.5 shrink-0" />
+            {formatDate(deal.created_at)}
           </span>
         </div>
       </button>
