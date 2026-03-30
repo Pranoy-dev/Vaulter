@@ -129,9 +129,10 @@ async def _run_pipeline(deal_id: str):
         await asyncio.to_thread(link_leases, deal_id)
         await _update_job(deal_id, progress=0.85)
 
-        # Stage 5: Building overview (compute summary stats)
+        # Stage 5: Building overview — compute AI insights & deal scoring
         await _update_job(deal_id, stage="building_overview", progress=0.90)
-        await asyncio.sleep(0.3)
+        from app.services.deal_insights import compute_deal_insights
+        await asyncio.to_thread(compute_deal_insights, deal_id)
         await _update_job(deal_id, stage="done", progress=1.0, status="completed", completed=True)
 
         sb.table("deals").update({"status": "completed"}).eq("id", deal_id).execute()

@@ -55,6 +55,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Users,
   X,
 } from "lucide-react"
 import type { FileEntry, UploadProgress } from "@/lib/chunked-upload"
@@ -62,6 +63,7 @@ import { uploadFiles, isSupported } from "@/lib/chunked-upload"
 import { toast } from "sonner"
 import { useDealData } from "@/hooks/use-deal-data"
 import type { DealDocument, DuplicateGroup, LeaseChain } from "@/hooks/use-deal-data"
+import { useDealInsights } from "@/hooks/use-deal-insights"
 import { useClassifications } from "@/hooks/use-classifications"
 import type { Classification } from "@/hooks/use-classifications"
 import { useProcessingStatus, stageStatus } from "@/hooks/use-processing-status"
@@ -572,50 +574,318 @@ function LoadingRows() {
   )
 }
 
-function AiInsightsPanel({ documents, loading }: { documents: DealDocument[]; loading: boolean }) {
-  if (loading) return <LoadingRows />
+function AiInsightsPanel({ dealId, documents, loading }: { dealId: string | null; documents: DealDocument[]; loading: boolean }) {
+  const { insights, loading: insightsLoading } = useDealInsights(dealId)
+
+  if (loading || insightsLoading) return <LoadingRows />
   if (documents.length === 0)
     return <EmptyState icon={Sparkles} message="No documents yet — upload files to see AI insights." />
+  if (!insights)
+    return <EmptyState icon={Sparkles} message="Process documents to generate AI insights." />
 
-  // Category breakdown
-  const byCategory = documents.reduce<Record<string, number>>((acc, d) => {
-    acc[d.assigned_category] = (acc[d.assigned_category] ?? 0) + 1
-    return acc
-  }, {})
+  const RISK_COLORS: Record<string, string> = {
+    green: "text-green-600 dark:text-green-400",
+    amber: "text-amber-600 dark:text-amber-400",
+    orange: "text-orange-600 dark:text-orange-400",
+    red: "text-red-600 dark:text-red-400",
+  }
 
-  const totalSize = documents.reduce((s, d) => s + d.file_size, 0)
+  const RISK_BG_COLORS: Record<string, string> = {
+    green: "bg-green-100 dark:bg-green-950/50",
+    amber: "bg-amber-100 dark:bg-amber-950/50",
+    orange: "bg-orange-100 dark:bg-orange-950/50",
+    red: "bg-red-100 dark:bg-red-950/50",
+  }
+
+  const RISK_RING_COLORS: Record<string, string> = {
+    green: "stroke-green-500 dark:stroke-green-400",
+    amber: "stroke-amber-500 dark:stroke-amber-400",
+    orange: "stroke-orange-500 dark:stroke-orange-400",
+    red: "stroke-red-500 dark:stroke-red-400",
+  }
+
+  const SEVERITY_ICONS: Record<string, { icon: React.ElementType; color: string }> = {
+    critical: { icon: AlertTriangle, color: "text-red-500" },
+    warning: { icon: AlertTriangle, color: "text-amber-500" },
+    info: { icon: CheckCircle2, color: "text-blue-500" },
+    positive: { icon: CheckCircle2, color: "text-green-500" },
+  }
+
+  // Risk score ring
+  const radius = 40
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (insights.risk_score / 100) * circumference
 
   return (
-    <div className="space-y-3">
-      {/* Summary row */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3">
-          <p className="text-2xl font-semibold tabular-nums">{documents.length}</p>
-          <p className="text-xs text-muted-foreground">Total documents</p>
-        </div>
-        <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3">
-          <p className="text-2xl font-semibold tabular-nums">{formatBytes(totalSize)}</p>
-          <p className="text-xs text-muted-foreground">Total size</p>
+    <div className="space-y-3 pr-1">
+      {/* ── Deal Risk Score ── */}
+      <div className={`rounded-xl border border-border/70 ${RISK_BG_COLORS[insights.risk_band.color] ?? RISK_BG_COLORS.amber} p-4`}>
+        <div className="flex items-center gap-4">
+          {/* Score ring */}
+          <div className="relative flex shrink-0 items-center justify-center">
+            <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+              <circle cx="48" cy="48" r={radius} fill="none" stroke="currentColor" strokeWidth="6" className="text-black/5 dark:text-white/10" />
+              <circle
+                cx="48" cy="48" r={radius} fill="none"
+                strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={offset}
+                className={`transition-all duration-700 ease-out ${RISK_RING_COLORS[insights.risk_band.color] ?? RISK_RING_COLORS.amber}`}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className={`text-2xl font-bold tabular-nums ${RISK_COLORS[insights.risk_band.color] ?? RISK_COLORS.amber}`}>
+                {Math.round(insights.risk_score)}
+              </span>
+              <span className="text-[10px] text-muted-foreground">/100</span>
+            </div>
+          </div>
+          {/* Label + dimensions */}
+          <div className="min-w-0 flex-1">
+            <p className={`text-sm font-semibold ${RISK_COLORS[insights.risk_band.color] ?? ""}`}>
+              {insights.risk_band.label}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">Deal Risk Score</p>
+            <div className="mt-2 space-y-1">
+              {Object.values(insights.dimensions).map((dim) => (
+                <div key={dim.label} className="flex items-center gap-2">
+                  <span className="w-24 truncate text-[11px] text-muted-foreground">{dim.label}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        dim.score >= 75 ? "bg-green-500" : dim.score >= 50 ? "bg-amber-500" : dim.score >= 25 ? "bg-orange-500" : "bg-red-500"
+                      }`}
+                      style={{ width: `${dim.score}%` }}
+                    />
+                  </div>
+                  <span className="w-8 text-right text-[11px] font-medium tabular-nums">{Math.round(dim.score)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Category cards */}
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">By category</p>
-        {Object.entries(byCategory)
-          .sort((a, b) => b[1] - a[1])
-          .map(([cat, count]) => (
-            <div
-              key={cat}
-              className="flex items-center justify-between rounded-lg border border-border/60 bg-background/60 px-3 py-2"
-            >
-              <span className="text-sm">{CATEGORY_LABELS[cat] ?? cat}</span>
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other}`}>
-                {count}
-              </span>
+      {/* ── WAULT & Key Metrics ── */}
+      {(insights.wault !== null || insights.key_metrics.length > 0) && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {insights.wault !== null && (
+            <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <Clock className="size-3.5 text-muted-foreground/60" />
+                <p className="text-[11px] text-muted-foreground">WAULT</p>
+              </div>
+              <p className={`mt-0.5 text-lg font-semibold tabular-nums ${
+                insights.wault >= 7 ? "text-green-600 dark:text-green-400" :
+                insights.wault >= 3 ? "text-amber-600 dark:text-amber-400" :
+                "text-red-600 dark:text-red-400"
+              }`}>
+                {insights.wault.toFixed(1)}<span className="text-xs font-normal text-muted-foreground"> yr</span>
+              </p>
+            </div>
+          )}
+          <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+            <div className="flex items-center gap-1.5">
+              <Files className="size-3.5 text-muted-foreground/60" />
+              <p className="text-[11px] text-muted-foreground">Documents</p>
+            </div>
+            <p className="mt-0.5 text-lg font-semibold tabular-nums">
+              {insights.processed_documents}<span className="text-xs font-normal text-muted-foreground">/{insights.total_documents}</span>
+            </p>
+          </div>
+          {insights.key_metrics.filter((m) => m.label === "Tenants Identified").map((m) => (
+            <div key={m.label} className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <Users className="size-3.5 text-muted-foreground/60" />
+                <p className="text-[11px] text-muted-foreground">{m.label}</p>
+              </div>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
             </div>
           ))}
+          {insights.key_metrics.filter((m) => m.label === "Signed Documents").map((m) => (
+            <div key={m.label} className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <Shield className="size-3.5 text-muted-foreground/60" />
+                <p className="text-[11px] text-muted-foreground">Signed</p>
+              </div>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
+            </div>
+          ))}
+          {insights.key_metrics.filter((m) => m.label === "With Expiry Dates").map((m) => (
+            <div key={m.label} className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+              <div className="flex items-center gap-1.5">
+                <Clock className="size-3.5 text-muted-foreground/60" />
+                <p className="text-[11px] text-muted-foreground">With Expiry</p>
+              </div>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums">{m.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Circuit Breakers ── */}
+      {insights.circuit_breakers.length > 0 && (
+        <div className="space-y-1">
+          {insights.circuit_breakers.map((b, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/30">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+              <p className="text-xs text-red-700 dark:text-red-400">{b.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Key Risk Drivers ── */}
+      {insights.risk_drivers.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Key risk signals</p>
+          {insights.risk_drivers.map((d, i) => {
+            const sev = SEVERITY_ICONS[d.severity] ?? SEVERITY_ICONS.info
+            const SevIcon = sev.icon
+            return (
+              <div key={i} className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
+                <SevIcon className={`mt-0.5 size-3.5 shrink-0 ${sev.color}`} />
+                <p className="text-xs text-muted-foreground">{d.message}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── What's Missing Checklist ── */}
+      {insights.missing_items.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">What&apos;s missing</p>
+          {insights.missing_items.map((m, i) => {
+            const tierColors: Record<number, string> = {
+              1: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
+              2: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+              3: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+            }
+            const tierLabels: Record<number, string> = { 1: "Critical", 2: "Important", 3: "Standard" }
+            return (
+              <div key={i} className="flex items-start gap-2 rounded-lg border border-border/40 bg-background/40 px-3 py-1.5">
+                <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${tierColors[m.tier] ?? tierColors[3]}`}>
+                  {tierLabels[m.tier] ?? "Info"}
+                </span>
+                <p className="text-xs text-muted-foreground">{m.message}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Lease Expiry Timeline ── */}
+      {insights.expiry_timeline.length > 0 && insights.expiry_timeline.some((b) => b.count > 0) && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Lease expiry timeline</p>
+          <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+            <div className="space-y-1.5">
+              {insights.expiry_timeline.map((bucket) => {
+                const barColor =
+                  bucket.label === "Year 1" ? "bg-red-400 dark:bg-red-500" :
+                  bucket.label === "Year 2" ? "bg-amber-400 dark:bg-amber-500" :
+                  bucket.label === "Year 3" ? "bg-yellow-400 dark:bg-yellow-500" :
+                  bucket.label.startsWith("Year") ? "bg-green-400 dark:bg-green-500" :
+                  "bg-emerald-400 dark:bg-emerald-500"
+                const isHighConc = bucket.pct > 20
+                return (
+                  <div key={bucket.label} className="flex items-center gap-2">
+                    <span className="w-16 shrink-0 text-right text-[11px] text-muted-foreground">{bucket.label}</span>
+                    <div className="flex-1 h-4 rounded bg-black/[0.03] dark:bg-white/[0.05] overflow-hidden relative">
+                      <div
+                        className={`h-full rounded transition-all duration-500 ${barColor} ${isHighConc ? "ring-1 ring-inset ring-red-500/50" : ""}`}
+                        style={{ width: `${Math.max(bucket.pct > 0 ? 4 : 0, bucket.pct)}%` }}
+                      />
+                      {/* 20% threshold line */}
+                      <div className="absolute top-0 bottom-0 left-[20%] w-px bg-red-400/30 dark:bg-red-400/20" />
+                    </div>
+                    <span className={`w-12 text-right text-[11px] font-medium tabular-nums ${isHighConc ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>
+                      {bucket.pct.toFixed(0)}%
+                    </span>
+                    <span className="w-6 text-right text-[10px] text-muted-foreground/50 tabular-nums">{bucket.count}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-1.5 text-[10px] text-muted-foreground/50">Red line = 20% concentration threshold</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Category breakdown ── */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground">By category</p>
+        {insights.category_breakdown.map(({ category: cat, count }) => (
+          <div
+            key={cat}
+            className="flex items-center justify-between rounded-lg border border-border/60 bg-background/60 px-3 py-2"
+          >
+            <span className="text-sm">{CATEGORY_LABELS[cat] ?? cat}</span>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.other}`}>
+              {count}
+            </span>
+          </div>
+        ))}
       </div>
+
+      {/* ── Document summaries (collapsible) ── */}
+      {insights.document_insights.length > 0 && (
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="flex w-full items-center gap-1.5 rounded-lg border border-border/40 bg-background/40 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/30 transition-colors">
+              <ChevronRight className="size-3.5 transition-transform [[data-state=open]>&]:rotate-90" />
+              Document summaries ({insights.document_insights.length})
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-1 space-y-1">
+              {insights.document_insights.slice(0, 20).map((doc) => (
+                <div key={doc.id} className="rounded-lg border border-border/30 bg-background/30 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <FileIcon className="size-3 shrink-0 text-muted-foreground/40" />
+                    <span className="text-[11px] font-medium truncate">{doc.filename}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${CATEGORY_COLORS[doc.category] ?? CATEGORY_COLORS.other}`}>
+                      {CATEGORY_LABELS[doc.category] ?? doc.category}
+                    </span>
+                  </div>
+                  {doc.summary && (
+                    <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">{doc.summary}</p>
+                  )}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {doc.parties?.map((p) => (
+                      <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">{p}</span>
+                    ))}
+                    {doc.expiry_date && (
+                      <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                        Expires: {doc.expiry_date}
+                      </span>
+                    )}
+                    {doc.has_signature && (
+                      <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-950/30 dark:text-green-400">Signed</span>
+                    )}
+                    {doc.has_seal && (
+                      <span className="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] text-purple-700 dark:bg-purple-950/30 dark:text-purple-400">Sealed</span>
+                    )}
+                    {doc.is_incomplete && (
+                      <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700 dark:bg-red-950/30 dark:text-red-400">Incomplete</span>
+                    )}
+                  </div>
+                  {doc.key_terms && Object.keys(doc.key_terms).length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      {Object.entries(doc.key_terms).slice(0, 6).map(([k, v]) => (
+                        <span key={k} className="text-[10px] text-muted-foreground">
+                          <span className="text-muted-foreground/60">{k.replace(/_/g, " ")}:</span> {v}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   )
 }
@@ -1060,51 +1330,65 @@ function FileStructurePanel({
     <>
       {/* Confirm folder delete dialog */}
       <Dialog open={!!confirmFolderDelete} onOpenChange={(open) => { if (!open) setConfirmFolderDelete(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Delete folder?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Folder <span className="font-medium text-foreground">{confirmFolderDelete?.name}</span> and{" "}
-            {confirmFolderDelete?.fileCount === 0
-              ? "all its contents"
-              : <><span className="font-medium text-foreground">{confirmFolderDelete?.fileCount} file{confirmFolderDelete?.fileCount !== 1 ? "s" : ""}</span> inside it</>}{" "}
-            will be permanently deleted.
-          </p>
-          {confirmFolderDelete && confirmFolderDelete.files.length > 0 && (
-            <div className="rounded-md border border-border/60 bg-muted/40 overflow-hidden">
-              <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b border-border/40">
-                Files to be deleted ({confirmFolderDelete.files.length})
+        <DialogContent className="max-w-lg gap-0 p-0">
+          {/* Header row */}
+          <div className="flex items-center border-b px-5 py-4 pr-12 rounded-t-xl overflow-hidden">
+            <DialogTitle>Delete folder?</DialogTitle>
+          </div>
+          {/* Body */}
+          <div className="space-y-3 px-5 py-5">
+            <p className="text-sm text-muted-foreground">
+              Folder <span className="font-medium text-foreground">{confirmFolderDelete?.name}</span> and{" "}
+              {confirmFolderDelete?.fileCount === 0
+                ? "all its contents"
+                : <><span className="font-medium text-foreground">{confirmFolderDelete?.fileCount} file{confirmFolderDelete?.fileCount !== 1 ? "s" : ""}</span> inside it</>}{" "}
+              will be permanently deleted.
+            </p>
+            {confirmFolderDelete && confirmFolderDelete.files.length > 0 && (
+              <div className="rounded-md border border-border/60 bg-muted/40 overflow-hidden">
+                <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b border-border/40">
+                  Files to be deleted ({confirmFolderDelete.files.length})
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  <ul className="divide-y divide-border/30">
+                    {confirmFolderDelete.files.map((f) => (
+                      <li key={f} className="flex items-center gap-2 px-3 py-1.5">
+                        <span className="text-[11px] text-muted-foreground truncate" title={f}>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <div className="max-h-48 overflow-y-auto">
-                <ul className="divide-y divide-border/30">
-                  {confirmFolderDelete.files.map((f) => (
-                    <li key={f} className="flex items-center gap-2 px-3 py-1.5">
-                      <span className="text-[11px] text-muted-foreground truncate" title={f}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
+            )}
+          </div>
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 border-t px-5 py-3 rounded-b-xl">
             <Button variant="outline" onClick={() => setConfirmFolderDelete(null)} disabled={!!deletingFolderPath}>Cancel</Button>
             <Button variant="destructive" onClick={handleFolderDeleteConfirmed} disabled={!!deletingFolderPath}>
               {deletingFolderPath ? <><Loader2 className="size-4 animate-spin mr-1" />Deleting…</> : "Delete folder"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Confirm file delete dialog */}
       <Dialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Delete file?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{confirmDelete?.filename}</span> will be permanently removed.
-          </p>
-          <DialogFooter>
+        <DialogContent className="max-w-lg gap-0 p-0">
+          {/* Header row */}
+          <div className="flex items-center border-b px-5 py-4 pr-12 rounded-t-xl">
+            <DialogTitle>Delete file?</DialogTitle>
+          </div>
+          {/* Body */}
+          <div className="px-5 py-5">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{confirmDelete?.filename}</span> will be permanently removed.
+            </p>
+          </div>
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 border-t px-5 py-3 rounded-b-xl">
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDeleteConfirmed}>Delete</Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1344,17 +1628,22 @@ function DuplicationPanel({
     <>
       {/* Confirm delete dialog */}
       <Dialog open={!!confirmDoc} onOpenChange={(open) => { if (!open) setConfirmDoc(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
+        <DialogContent className="max-w-lg gap-0 p-0">
+          {/* Header row */}
+          <div className="flex items-center border-b px-5 py-4 pr-12 rounded-t-xl">
             <DialogTitle>Delete duplicate?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{confirmDoc?.filename}</span> will be permanently removed.
-          </p>
-          <DialogFooter>
+          </div>
+          {/* Body */}
+          <div className="px-5 py-5">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{confirmDoc?.filename}</span> will be permanently removed.
+            </p>
+          </div>
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 border-t px-5 py-3 rounded-b-xl">
             <Button variant="outline" onClick={() => setConfirmDoc(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete}>Delete</Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1644,22 +1933,54 @@ function ClassificationPanel({
     <div className="space-y-3">
       {/* Duplicate warning dialog */}
       <Dialog open={showDuplicateWarning} onOpenChange={setShowDuplicateWarning}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Duplicate files detected</DialogTitle>
-            <DialogDescription>
-              {duplicates.length} duplicate group{duplicates.length !== 1 ? "s" : ""} exist in your data room. Processing now may classify duplicates separately. Consider resolving duplicates first.
+        <DialogContent className="max-w-lg gap-0 p-0 border-amber-300 dark:border-amber-700">
+          {/* Header row */}
+          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50/60 px-5 py-4 pr-12 rounded-t-xl dark:border-amber-800 dark:bg-amber-950/20">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60">
+              <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <DialogTitle className="text-amber-900 dark:text-amber-200">Remove duplicates first</DialogTitle>
+          </div>
+          {/* Body */}
+          <div className="px-5 py-5">
+            <DialogDescription className="text-sm leading-relaxed">
+              <span className="font-semibold text-amber-700 dark:text-amber-400">{duplicates.length} duplicate group{duplicates.length !== 1 ? "s" : ""}</span> detected in your data room.
+              Processing duplicates wastes AI quota and inflates costs — each duplicate is classified separately.
+              <br /><br />
+              <strong>Recommended:</strong> go to the <span className="font-semibold">Duplication</span> tab, remove the duplicates, then come back to process.
             </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowDuplicateWarning(false)}>Cancel</Button>
-            <Button size="sm" onClick={() => { setShowDuplicateWarning(false); doProcess() }}>Process anyway</Button>
-          </DialogFooter>
+          </div>
+          {/* Footer */}
+          <div className="flex items-center justify-between gap-3 border-t px-5 py-3 rounded-b-xl">
+            <Button variant="outline" size="sm"
+              className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/40"
+              onClick={() => setShowDuplicateWarning(false)}
+            >
+              Cancel — I&apos;ll remove them first
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => { setShowDuplicateWarning(false); doProcess() }}>
+              Process anyway
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Action bar */}
       {dealId && (
         <div className="space-y-2">
+          {/* Duplicate warning banner */}
+          {duplicates.length > 0 && !isProcessingActive && !processing && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-700 dark:bg-amber-950/30">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                  {duplicates.length} duplicate group{duplicates.length !== 1 ? "s" : ""} detected — remove before processing
+                </p>
+                <p className="mt-0.5 text-[11px] text-amber-700/80 dark:text-amber-400/70">
+                  Processing duplicates wastes AI quota. Go to the Duplication tab to remove them first.
+                </p>
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <p className="text-xs text-muted-foreground">
@@ -1855,7 +2176,7 @@ function ClassificationPanel({
   )
 }
 
-function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loading: boolean }) {
+function LeaseAmendmentPanel({ chains, documents, loading }: { chains: LeaseChain[]; documents: DealDocument[]; loading: boolean }) {
   if (loading) return <LoadingRows />
   if (chains.length === 0)
     return <EmptyState icon={Link2} message="No lease chains found yet." />
@@ -1868,42 +2189,156 @@ function LeaseAmendmentPanel({ chains, loading }: { chains: LeaseChain[]; loadin
     unknown: "Unknown",
   }
 
+  const DOC_TYPE_COLORS: Record<string, string> = {
+    base_lease: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
+    amendment: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400",
+    side_letter: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
+    correspondence: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    unknown: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+  }
+
+  // Build a lookup from document_id to full DealDocument
+  const docMap = React.useMemo(() => {
+    const map = new Map<string, DealDocument>()
+    for (const d of documents) map.set(d.id, d)
+    return map
+  }, [documents])
+
+  // Stats
+  const totalChains = chains.length
+  const orphanCount = chains.reduce((sum, c) => sum + c.documents.filter((d) => d.is_orphaned).length, 0)
+  const baseLeaseCount = chains.filter((c) => c.documents.some((d) => d.doc_type === "base_lease")).length
+  const totalDocs = chains.reduce((sum, c) => sum + c.documents.length, 0)
+
   return (
-    <div className="space-y-2 pr-1">
-        {chains.map((chain) => (
+    <div className="space-y-3 pr-1">
+      {/* ── Summary stats ── */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+          <p className="text-lg font-semibold tabular-nums">{totalChains}</p>
+          <p className="text-[11px] text-muted-foreground">Lease Chains</p>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+          <p className="text-lg font-semibold tabular-nums">{totalDocs}</p>
+          <p className="text-[11px] text-muted-foreground">Documents</p>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+          <p className={`text-lg font-semibold tabular-nums ${baseLeaseCount === totalChains ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
+            {baseLeaseCount}/{totalChains}
+          </p>
+          <p className="text-[11px] text-muted-foreground">With Base Lease</p>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+          <p className={`text-lg font-semibold tabular-nums ${orphanCount === 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            {orphanCount}
+          </p>
+          <p className="text-[11px] text-muted-foreground">Orphaned</p>
+        </div>
+      </div>
+
+      {/* ── Chains ── */}
+      {chains.map((chain) => {
+        // Find any deal document that matches a chain doc for metadata
+        const chainFullDocs = chain.documents
+          .map((cd) => ({ chainDoc: cd, fullDoc: docMap.get(cd.document_id) }))
+          .filter((x) => x.fullDoc)
+
+        // Get key terms from base lease if available
+        const baseDoc = chainFullDocs.find((x) => x.chainDoc.doc_type === "base_lease")?.fullDoc
+        const keyTerms = baseDoc?.key_terms
+        const parties = baseDoc?.parties
+        const expiryDate = baseDoc?.expiry_date
+
+        return (
           <div key={chain.id} className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-border/40 bg-muted/30 px-3 py-2">
-              <Link2 className="size-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium">{chain.tenant_name}</p>
-                {chain.tenant_identifier && (
-                  <p className="truncate text-[11px] text-muted-foreground/70">{chain.tenant_identifier}</p>
-                )}
-              </div>
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                {chain.documents.length} doc{chain.documents.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="divide-y divide-border/30">
-              {chain.documents.map((doc) => (
-                <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5">
-                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/40" />
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={doc.original_path ?? ""}>
-                    {doc.filename ?? doc.original_path ?? "Unknown"}
-                  </span>
-                  <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
-                    {DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}
-                    {doc.amendment_number != null ? ` #${doc.amendment_number}` : ""}
-                  </span>
-                  {doc.is_orphaned && (
-                    <AlertTriangle className="size-4 shrink-0 text-amber-500" title="Orphaned" />
+            {/* Header */}
+            <div className="border-b border-border/40 bg-muted/30 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Link2 className="size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{chain.tenant_name}</p>
+                  {chain.tenant_identifier && chain.tenant_identifier !== chain.tenant_name && (
+                    <p className="truncate text-[11px] text-muted-foreground/70">{chain.tenant_identifier}</p>
                   )}
                 </div>
-              ))}
+                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                  {chain.documents.length} doc{chain.documents.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              {/* Metadata from base lease */}
+              {(parties || expiryDate || keyTerms) && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {parties?.slice(0, 3).map((p) => (
+                    <span key={p} className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">{p}</span>
+                  ))}
+                  {expiryDate && (
+                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                      Expires: {expiryDate}
+                    </span>
+                  )}
+                  {keyTerms?.rent_amount && (
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                      Rent: {keyTerms.rent_amount}
+                    </span>
+                  )}
+                  {keyTerms?.annual_rent && !keyTerms?.rent_amount && (
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                      Rent: {keyTerms.annual_rent}
+                    </span>
+                  )}
+                  {keyTerms?.lease_term && (
+                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                      Term: {keyTerms.lease_term}
+                    </span>
+                  )}
+                  {keyTerms?.rent_escalation && (
+                    <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                      {keyTerms.rent_escalation}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Documents in chain */}
+            <div className="divide-y divide-border/30">
+              {chain.documents.map((doc) => {
+                const fullDoc = docMap.get(doc.document_id)
+                return (
+                  <div key={doc.id} className="flex items-center gap-2 px-3 py-1.5">
+                    <div className="flex size-5 shrink-0 items-center justify-center">
+                      {doc.doc_type === "base_lease" ? (
+                        <FileIcon className="size-3.5 text-blue-500" />
+                      ) : doc.doc_type === "amendment" ? (
+                        <FilePenLine className="size-3.5 text-purple-500" />
+                      ) : (
+                        <ChevronRight className="size-3.5 text-muted-foreground/40" />
+                      )}
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={doc.original_path ?? ""}>
+                      {doc.filename ?? doc.original_path ?? "Unknown"}
+                    </span>
+                    {fullDoc?.has_signature && (
+                      <HoverTooltip content="Signed document">
+                        <CheckCircle2 className="size-3 shrink-0 text-green-500 cursor-default" />
+                      </HoverTooltip>
+                    )}
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${DOC_TYPE_COLORS[doc.doc_type] ?? DOC_TYPE_COLORS.unknown}`}>
+                      {DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}
+                      {doc.amendment_number != null ? ` #${doc.amendment_number}` : ""}
+                    </span>
+                    {doc.is_orphaned && (
+                      <HoverTooltip content="Orphaned — this amendment has no matching base lease in the chain.">
+                        <AlertTriangle className="size-4 shrink-0 text-amber-500 cursor-default" />
+                      </HoverTooltip>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
-        ))}
-      </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -2208,15 +2643,22 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/20">
       {/* Upload card: confirm delete dialog */}
       <Dialog open={!!uploadConfirmDelete} onOpenChange={(open) => { if (!open) setUploadConfirmDelete(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Delete file?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{uploadConfirmDelete?.filename}</span> will be permanently removed.
-          </p>
-          <DialogFooter>
+        <DialogContent className="max-w-lg gap-0 p-0">
+          {/* Header row */}
+          <div className="flex items-center border-b px-5 py-4 pr-12 rounded-t-xl">
+            <DialogTitle>Delete file?</DialogTitle>
+          </div>
+          {/* Body */}
+          <div className="px-5 py-5">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{uploadConfirmDelete?.filename}</span> will be permanently removed.
+            </p>
+          </div>
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 border-t px-5 py-3 rounded-b-xl">
             <Button variant="outline" onClick={() => setUploadConfirmDelete(null)}>Cancel</Button>
             <Button variant="destructive" onClick={handleUploadDeleteConfirmed}>Delete</Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Upload card: file preview dialog */}
@@ -2354,20 +2796,20 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                     })()}
                   </ToggleGroupItem>
                   <ToggleGroupItem
-                    value="lease-amendment"
-                    aria-label="Lease amendment"
-                    className={sectionToggleItemClass}
-                  >
-                    <FilePenLine aria-hidden />
-                    Lease Amendment
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
                     value="ai-insights"
                     aria-label="AI insights"
                     className={sectionToggleItemClass}
                   >
                     <Sparkles aria-hidden />
                     AI Insights
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="lease-amendment"
+                    aria-label="Lease amendment"
+                    className={sectionToggleItemClass}
+                  >
+                    <FilePenLine aria-hidden />
+                    Lease Amendment
                   </ToggleGroupItem>
                 </>
               )}
@@ -2912,7 +3354,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               isDemoWorkspace ? (
                 <DemoAiInsightsPanel />
               ) : (
-                <AiInsightsPanel documents={dealData.documents} loading={dealData.loading} />
+                <AiInsightsPanel dealId={dealId} documents={dealData.documents} loading={dealData.loading} />
               )
             ) : null}
             {section === "file-structure" ? (
@@ -2956,7 +3398,7 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
               isDemoWorkspace ? (
                 <DemoLeaseChainsPanel />
               ) : (
-                <LeaseAmendmentPanel chains={dealData.leaseChains} loading={dealData.loading} />
+                <LeaseAmendmentPanel chains={dealData.leaseChains} documents={dealData.documents} loading={dealData.loading} />
               )
             ) : null}
 
@@ -2977,13 +3419,13 @@ export function ProjectSetupScreen({ dealId, projectTitle, hasCompany, onBack }:
                 nextLabel = "Classification"
                 NextIcon = LayoutGrid
               } else if (section === "file-structure") {
-                nextSec = "lease-amendment"
-                nextLabel = "Lease Amendment"
-                NextIcon = FilePenLine
-              } else if (section === "lease-amendment") {
                 nextSec = "ai-insights"
                 nextLabel = "AI Insights"
                 NextIcon = Sparkles
+              } else if (section === "ai-insights") {
+                nextSec = "lease-amendment"
+                nextLabel = "Lease Amendment"
+                NextIcon = FilePenLine
               }
               if (!nextSec || !NextIcon) return null
               const dest = nextSec

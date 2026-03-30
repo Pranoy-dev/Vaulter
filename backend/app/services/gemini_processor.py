@@ -232,7 +232,26 @@ Perform ALL of the following tasks in a single pass:
 5. **Expiry / Termination Date**: If the document contains an expiry date, termination date, or end date, extract it in ISO 8601 format (YYYY-MM-DD). Return null if none found.
 6. **Signatures & Seals**: Indicate whether the document contains handwritten or digital signatures, and whether it contains official seals, stamps, or notary marks.
 7. **Parties**: List the names of all parties, companies, or entities mentioned as signatories or principals.
-8. **Key Terms**: Extract key financial and legal terms as key-value pairs (e.g. "rent_amount": "$5,000/month", "lease_term": "5 years"). Only include terms actually present in the document.
+8. **Key Terms**: Extract key financial and legal terms as key-value pairs. Only include terms actually present in the document. For lease/rental documents, be especially thorough and extract ALL of these if present:
+   - "annual_rent" or "rent_amount": the base rent (specify amount and period, e.g. "$60,000/year")
+   - "lease_term": duration (e.g. "5 years")
+   - "lease_start_date": in ISO 8601 format (YYYY-MM-DD)
+   - "lease_end_date": in ISO 8601 format (YYYY-MM-DD)
+   - "break_option_date": tenant break option date in ISO 8601 format, if any
+   - "break_option_notice": notice period for break option (e.g. "6 months")
+   - "rent_escalation": type and details (e.g. "CPI-linked annually", "Fixed 3% per annum", "Open market review every 5 years")
+   - "security_deposit": amount or description
+   - "tenant_name": primary tenant name
+   - "landlord_name": primary landlord name
+   - "property_address": property location
+   - "leasable_area": area with unit (e.g. "5,000 sqm")
+   - "rent_review_date": next rent review date if specified
+   - "service_charge": amount if specified
+   - "vacancy_rate": if mentioned
+   - "occupancy_rate": if mentioned
+   - "noi" or "net_operating_income": if mentioned
+   - "dscr" or "debt_service_coverage": if mentioned
+   For other document types, extract terms like purchase price, interest rate, loan amount, valuation, etc.
 9. **Semantic Chunking**: Split the document into semantically meaningful chunks for use in search and retrieval.
    - Each chunk should cover ONE coherent topic, section, clause, or logical unit (target ~300-500 words each).
    - Use natural boundaries: section headings, clause breaks, topic shifts, exhibit separators.
@@ -262,7 +281,14 @@ The text below was extracted from a non-PDF file. Perform the following tasks:
 4. **Expiry / Termination Date**: If the document contains an expiry date, termination date, or end date, extract it in ISO 8601 format (YYYY-MM-DD). Return null if none found.
 5. **Signatures & Seals**: Indicate whether the document mentions or contains signatures, and whether it mentions or contains official seals, stamps, or notary marks.
 6. **Parties**: List the names of all parties, companies, or entities mentioned as signatories or principals.
-7. **Key Terms**: Extract key financial and legal terms as key-value pairs (e.g. "rent_amount": "$5,000/month", "lease_term": "5 years"). Only include terms actually present.
+7. **Key Terms**: Extract key financial and legal terms as key-value pairs. Only include terms actually present. For lease/rental documents, be especially thorough and extract ALL of these if present:
+   - "annual_rent" or "rent_amount": the base rent (specify amount and period)
+   - "lease_term", "lease_start_date" (YYYY-MM-DD), "lease_end_date" (YYYY-MM-DD)
+   - "break_option_date" (YYYY-MM-DD), "break_option_notice"
+   - "rent_escalation": type and details (e.g. "CPI-linked", "Fixed 3%", "Open market review")
+   - "security_deposit", "tenant_name", "landlord_name", "property_address"
+   - "leasable_area", "service_charge", "occupancy_rate", "vacancy_rate"
+   For financial docs, extract: "noi", "dscr", "purchase_price", "interest_rate", "loan_amount", "valuation"
 8. **Semantic Chunking**: Split the document text into semantically meaningful chunks for use in search and retrieval.
    - Each chunk should cover ONE coherent topic, section, clause, or logical unit (target ~300-500 words each).
    - Use natural boundaries: section headings, clause breaks, topic shifts.

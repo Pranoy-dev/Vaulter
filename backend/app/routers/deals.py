@@ -1,4 +1,4 @@
-"""Deals CRUD + overview endpoints (Phase 3 + Phase 5)."""
+"""Deals CRUD + overview endpoints (Phase 3 + Phase 5 + AI Insights)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth import get_current_user_id
+from app.services.deal_insights import compute_deal_insights
 from app.db.client import get_supabase
 from app.models.schemas import (
     ApiResponse,
@@ -267,6 +268,25 @@ async def list_lease_chains(
                 documents=doc_list,
             ))
         return ApiResponse.ok({"chains": result})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
+# ── AI Insights (Deal Risk Score + What's Missing + Lease Expiry) ────────────
+
+@router.get("/{deal_id}/insights")
+async def get_deal_insights(
+    deal_id: uuid.UUID,
+    clerk_user_id: str = Depends(get_current_user_id),
+):
+    """Compute and return AI-powered deal insights including risk scoring."""
+    try:
+        user_id = _resolve_user_id(clerk_user_id)
+        _verify_deal_ownership(deal_id, user_id)
+        insights = compute_deal_insights(str(deal_id))
+        return ApiResponse.ok(insights)
     except HTTPException:
         raise
     except Exception as exc:

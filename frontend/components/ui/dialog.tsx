@@ -66,18 +66,15 @@ function DialogContent({
         )}
         {...props}
       >
-        {children}
+        <div className="rounded-xl overflow-hidden">
+          {children}
+        </div>
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button
-              variant="ghost"
-              className="absolute top-2 right-2"
-              size="icon-sm"
-            >
-              <XIcon
-              />
+            <button className="absolute -top-3.5 -right-3.5 z-10 flex size-7 items-center justify-center rounded-full ring-1 ring-foreground/10 bg-background text-muted-foreground shadow-lg transition-all duration-150 hover:bg-muted hover:text-foreground hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <XIcon className="size-3.5" />
               <span className="sr-only">Close</span>
-            </Button>
+            </button>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

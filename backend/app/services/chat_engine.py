@@ -19,6 +19,7 @@ from openai import OpenAI
 from app.config import settings
 from app.db.client import get_supabase
 from app.services.embeddings import search_chunks
+from app.services.deal_insights import compute_deal_insights
 
 logger = logging.getLogger(__name__)
 
@@ -495,6 +496,67 @@ def _build_deal_overview(deal_id: str) -> str:
     return "\n".join(lines)
 
 
+def _build_insights_context(deal_id: str) -> str:
+    """Build a text summary of AI insights for the chat context."""
+    try:
+        insights = compute_deal_insights(deal_id)
+    except Exception as exc:
+        logger.warning("Failed to compute insights for chat context: %s", exc)
+        return ""
+
+    lines = ["## AI Deal Insights"]
+
+    # Risk score
+    score = insights.get("risk_score", 0)
+    band = insights.get("risk_band", {})
+    lines.append(f"\n**Deal Risk Score: {score:.0f}/100 — {band.get('label', 'Unknown')}**")
+
+    # Dimension breakdown
+    dims = insights.get("dimensions", {})
+    for key, dim in dims.items():
+        lines.append(f"  - {dim['label']}: {dim['score']:.0f}/100 (weight: {dim['weight']:.0%})")
+
+    # WAULT
+    wault = insights.get("wault")
+    if wault is not None:
+        lines.append(f"\n**WAULT (Weighted Average Unexpired Lease Term): {wault:.1f} years**")
+
+    # Circuit breakers
+    breakers = insights.get("circuit_breakers", [])
+    if breakers:
+        lines.append("\n### Circuit Breakers (Critical Overrides)")
+        for b in breakers:
+            lines.append(f"  ⚠ {b['message']}")
+
+    # Top risk drivers
+    drivers = insights.get("risk_drivers", [])
+    if drivers:
+        lines.append("\n### Key Risk Signals")
+        for d in drivers[:7]:
+            icon = "🔴" if d["severity"] == "critical" else "🟡" if d["severity"] == "warning" else "🟢" if d["severity"] == "positive" else "ℹ️"
+            lines.append(f"  {icon} {d['message']}")
+
+    # What's missing
+    missing = insights.get("missing_items", [])
+    if missing:
+        lines.append("\n### What's Missing")
+        for m in missing:
+            tier_label = {1: "CRITICAL", 2: "IMPORTANT", 3: "STANDARD"}.get(m["tier"], "")
+            lines.append(f"  - [{tier_label}] {m['message']}")
+
+    # Expiry timeline
+    timeline = insights.get("expiry_timeline", [])
+    if timeline and any(b["count"] > 0 for b in timeline):
+        lines.append("\n### Lease Expiry Timeline")
+        for b in timeline:
+            if b["count"] > 0:
+                bar = "█" * max(1, int(b["pct"] / 5))
+                lines.append(f"  {b['label']} ({b['period']}): {b['pct']:.0f}% of rent, {b['count']} lease(s) {bar}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def get_chat_context(
     deal_id: str,
     user_id: str,
@@ -535,16 +597,19 @@ def get_chat_context(
     if not chunks:
         # Even without chunk hits, the deal overview is still useful
         overview = _build_deal_overview(deal_id)
+        insights_ctx = _build_insights_context(deal_id)
+        context_parts = [p for p in [overview, insights_ctx] if p]
         return {
             "session_id": sid,
-            "context": overview,
+            "context": "\n\n---\n\n".join(context_parts) if context_parts else "",
             "sources": [],
             "condensed_query": condensed,
-            "has_data": bool(overview),
+            "has_data": bool(context_parts),
         }
 
     # Deal overview (summaries + key terms for all docs)
     overview = _build_deal_overview(deal_id)
+    insights_ctx = _build_insights_context(deal_id)
 
     lines = []
     for i, c in enumerate(chunks):
@@ -558,6 +623,8 @@ def get_chat_context(
     context_parts = []
     if overview:
         context_parts.append(overview)
+    if insights_ctx:
+        context_parts.append(insights_ctx)
     context_parts.append(
         "## Retrieved Document Excerpts\n\n"
         + "\n\n".join(lines)
