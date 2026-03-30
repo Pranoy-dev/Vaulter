@@ -354,7 +354,7 @@ function StatusChatLog({
         if (lcFolders.length > 0) {
           entries.push({
             key: "last-file-folder",
-            text: `Last: 📁 ${lcFolders.join(" / ")}`,
+            text: `Previous: 📁 ${lcFolders.join(" / ")}`,
             icon: <CheckCircle2 className="size-3.5 opacity-60" />,
             accent: "border-violet-500/40",
           })
@@ -367,7 +367,7 @@ function StatusChatLog({
         } else {
           entries.push({
             key: "last-file-name",
-            text: `Last: ${lcFilename}`,
+            text: `Previous: ${lcFilename}`,
             icon: <CheckCircle2 className="size-3.5 opacity-60" />,
             accent: "border-violet-500/40",
           })
@@ -882,7 +882,7 @@ function FileStructurePanel({
   const [localPathOverrides, setLocalPathOverrides] = React.useState<Record<string, string>>({})
   const [movingId, setMovingId] = React.useState<string | null>(null)
   const [extraFolderPaths, setExtraFolderPaths] = React.useState<Set<string>>(new Set())
-  const [confirmFolderDelete, setConfirmFolderDelete] = React.useState<{ path: string; name: string; fileCount: number } | null>(null)
+  const [confirmFolderDelete, setConfirmFolderDelete] = React.useState<{ path: string; name: string; fileCount: number; files: string[] } | null>(null)
   const [deletingFolderPath, setDeletingFolderPath] = React.useState<string | null>(null)
 
   // Clear overrides when the parent documents list updates (server confirmed the change)
@@ -1069,6 +1069,22 @@ function FileStructurePanel({
               : <><span className="font-medium text-foreground">{confirmFolderDelete?.fileCount} file{confirmFolderDelete?.fileCount !== 1 ? "s" : ""}</span> inside it</>}{" "}
             will be permanently deleted.
           </p>
+          {confirmFolderDelete && confirmFolderDelete.files.length > 0 && (
+            <div className="rounded-md border border-border/60 bg-muted/40 overflow-hidden">
+              <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b border-border/40">
+                Files to be deleted ({confirmFolderDelete.files.length})
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                <ul className="divide-y divide-border/30">
+                  {confirmFolderDelete.files.map((f) => (
+                    <li key={f} className="flex items-center gap-2 px-3 py-1.5">
+                      <span className="text-[11px] text-muted-foreground truncate" title={f}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmFolderDelete(null)} disabled={!!deletingFolderPath}>Cancel</Button>
             <Button variant="destructive" onClick={handleFolderDeleteConfirmed} disabled={!!deletingFolderPath}>
@@ -1110,7 +1126,15 @@ function FileStructurePanel({
     <div className="rounded-xl border border-border/60 bg-background/60 overflow-hidden">
       <div className="divide-y divide-border/20">
         {topLevel.map((node) => (
-          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} onMove={handleMove} movingId={movingId} onDeleteFolder={canDelete ? (path, name, count) => setConfirmFolderDelete({ path, name, fileCount: count }) : undefined} deletingFolderPath={deletingFolderPath} />
+          <TreeNodeRow key={node.path} node={node} depth={0} showStatus={showStatus} onPreview={canPreview ? handlePreview : undefined} loadingPreviewId={loadingPreviewId} onDelete={canDelete ? (id, name) => setConfirmDelete({ id, filename: name }) : undefined} deletingId={deletingId} onMove={handleMove} movingId={movingId} onDeleteFolder={canDelete ? (path, name, count) => {
+              const currentDocs = documents
+                .filter((d) => !deletedIds.has(d.id))
+                .map((d) => localPathOverrides[d.id] !== undefined ? { ...d, original_path: localPathOverrides[d.id] } : d)
+              const folderFiles = currentDocs
+                .filter((d) => d.original_path === path + "/" + d.filename || d.original_path.startsWith(path + "/"))
+                .map((d) => d.filename)
+              setConfirmFolderDelete({ path, name, fileCount: count, files: folderFiles })
+            } : undefined} deletingFolderPath={deletingFolderPath} />
         ))}
         {/* Root-level drop zone — drop here to move to root */}
         <div

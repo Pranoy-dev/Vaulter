@@ -38,7 +38,7 @@ import type { FC, ReactNode } from "react";
 export const Thread: FC<{ chatPrepend?: ReactNode; disabled?: boolean }> = ({ chatPrepend, disabled }) => {
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root @container flex h-full min-h-0 flex-col bg-background"
+      className="aui-root aui-thread-root @container dark flex h-full min-h-0 flex-col bg-background"
       style={{
         ["--thread-max-width" as string]: "44rem",
         ["--composer-radius" as string]: "24px",

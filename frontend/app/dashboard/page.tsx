@@ -418,7 +418,6 @@ function ProjectsHome({
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl px-6 py-10">
-        <div className="rounded-xl border border-border/60 bg-card shadow-sm p-8">
         {/* search bar + new project button */}
         <div className="flex items-center gap-3 pb-6">
           <div className="relative flex-1">
@@ -487,7 +486,6 @@ function ProjectsHome({
               )}
             </>
           )}
-        </div>
         </div>
       </div>
 
