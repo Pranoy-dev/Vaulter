@@ -2,6 +2,21 @@ DEED OF VARIATION (LEASE AMENDMENT)
 =====================================
 DATED: 15 September 2023
 
+------------------------------------------------------------------------
+KEY TERMS SUMMARY
+------------------------------------------------------------------------
+Document Type        : Lease Amendment / Deed of Variation
+Amendment Number     : 1
+Tenant               : TechCorp UK Limited
+Landlord             : Riverside Holdings plc
+Property             : Unit 1, Riverside Business Park, Thames Valley, RG1 8PQ
+Base Lease Date      : 1 April 2020
+Base Lease Expiry Date: 31 March 2032  ← unchanged by this amendment
+This Amendment Date  : 15 September 2023
+Subject              : Additional car parking allocation; licence for server room fit-out
+Execution Status     : Fully signed and executed as a deed
+------------------------------------------------------------------------
+
 PARTIES
 -------
 (1) LANDLORD : Riverside Holdings plc ("the Landlord")

@@ -2,6 +2,21 @@ SIDE LETTER — DILAPIDATIONS PROTOCOL
 ======================================
 DATED: 22 November 2025
 
+------------------------------------------------------------------------
+KEY TERMS SUMMARY
+------------------------------------------------------------------------
+Document Type        : Side Letter
+Tenant               : TechCorp UK Ltd
+Landlord             : Riverside Holdings plc
+Property             : Unit 1, Riverside Business Park, Thames Valley, RG1 8PQ
+Base Lease Date      : 1 April 2020
+Base Lease Expiry Date: 31 March 2032  ← unchanged by this side letter
+Break Option Date    : 31 March 2028  ← referenced only; unchanged
+This Document Date   : 22 November 2025
+Subject              : Agreed dilapidations protocol for forthcoming break option
+Execution Status     : Signed side letter (not a deed)
+------------------------------------------------------------------------
+
 FROM: Riverside Holdings plc ("Landlord")
 TO  : TechCorp UK Ltd ("Tenant")
 

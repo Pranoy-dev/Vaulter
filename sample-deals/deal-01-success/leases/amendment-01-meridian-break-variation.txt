@@ -2,6 +2,24 @@ DEED OF VARIATION — BREAK OPTION
 ==================================
 DATED: 14 August 2025
 
+------------------------------------------------------------------------
+KEY TERMS SUMMARY
+------------------------------------------------------------------------
+Document Type        : Lease Amendment / Deed of Variation
+Amendment Number     : 1
+Tenant               : Meridian Consulting LLP
+Landlord             : Riverside Holdings plc
+Property             : Unit 3, Riverside Business Park, Thames Valley, RG1 8PQ
+Base Lease Date      : 1 July 2020
+Base Lease Expiry Date: 30 June 2030  ← unchanged by this amendment
+Break Option Date    : 30 June 2027  ← unchanged; only notice period varied
+This Amendment Date  : 14 August 2025
+Subject              : Break notice period reduced from 12 to 9 months;
+                       retention incentive (rent-free + fit-out contribution)
+Reviewed Annual Rent : £254,800 per annum (£26.00/sq ft) effective 1 July 2025
+Execution Status     : Fully signed and executed as a deed
+------------------------------------------------------------------------
+
 PARTIES
 -------
 (1) LANDLORD: Riverside Holdings plc ("the Landlord")

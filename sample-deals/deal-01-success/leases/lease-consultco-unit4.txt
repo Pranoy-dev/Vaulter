@@ -2,6 +2,23 @@ LEASE AGREEMENT
 ===============
 DATED: 1 January 2022
 
+------------------------------------------------------------------------
+KEY TERMS SUMMARY
+------------------------------------------------------------------------
+Document Type   : Base Lease
+Tenant          : ConsultCo Advisory Limited
+Landlord        : Riverside Holdings plc
+Property        : Unit 4, Riverside Business Park, Thames Valley, RG1 8PQ
+Lease Start Date: 1 January 2022
+Lease Expiry Date: 31 December 2029
+Lease Term      : 8 years
+Break Option Date: None — no break option in this lease
+Annual Rent     : £172,500 per annum (£23.00/sq ft) — effective 1 January 2026
+Rent Review Dates: 1 January 2026 (agreed)
+Escalation      : RPI-linked, cap 4% per annum compounded, floor 0%
+Execution Status: Fully signed and executed as a deed
+------------------------------------------------------------------------
+
 LANDLORD : Riverside Holdings plc
 
 TENANT   : ConsultCo Advisory Limited

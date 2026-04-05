@@ -103,7 +103,15 @@ class DocumentAnalysis(BaseModel):
         description="A concise 2-4 sentence summary of the document's content and purpose."
     )
     expiry_date: str | None = Field(
-        description="Expiry, termination, or end date found in the document (ISO 8601 format e.g. 2025-12-31), or null if none."
+        description=(
+            "The LEASE EXPIRY DATE — the contractual end date of the lease term itself "
+            "(ISO 8601, e.g. 2032-03-31). "
+            "CRITICAL: Do NOT use a break option date, rent review date, notice deadline, "
+            "or amendment date here. Break options allow early termination but the lease "
+            "formally expires on the lease expiry/end date. "
+            "If the document is an amendment, use the base lease's expiry date (unchanged). "
+            "Return null only if no lease expiry date is present at all."
+        )
     )
     has_signature: bool = Field(
         description="Whether the document contains handwritten or digital signatures."
@@ -144,7 +152,15 @@ class TextAnalysis(BaseModel):
         description="A concise 2-4 sentence summary of the document's content and purpose."
     )
     expiry_date: str | None = Field(
-        description="Expiry, termination, or end date found in the document (ISO 8601 format e.g. 2025-12-31), or null if none."
+        description=(
+            "The LEASE EXPIRY DATE — the contractual end date of the lease term itself "
+            "(ISO 8601, e.g. 2032-03-31). "
+            "CRITICAL: Do NOT use a break option date, rent review date, notice deadline, "
+            "or amendment date here. Break options allow early termination but the lease "
+            "formally expires on the lease expiry/end date. "
+            "If the document is an amendment, use the base lease's expiry date (unchanged). "
+            "Return null only if no lease expiry date is present at all."
+        )
     )
     has_signature: bool = Field(
         description="Whether the document mentions or contains signatures."
@@ -229,24 +245,30 @@ Perform ALL of the following tasks in a single pass:
    - Missing pages (e.g. page numbering gaps)
    - Draft watermarks without final version
 4. **Summary**: Write a concise 2-4 sentence summary of the document's content and purpose.
-5. **Expiry / Termination Date**: If the document contains an expiry date, termination date, or end date, extract it in ISO 8601 format (YYYY-MM-DD). Return null if none found.
+5. **Lease Expiry Date** (CRITICAL — read carefully):
+   - Extract the formal LEASE EXPIRY / END DATE — the date on which the lease term contractually expires.
+   - This is NOT the break option date. A break option is a right to terminate early; the lease itself still runs to the expiry date unless the break is exercised.
+   - This is NOT the rent review date, the amendment date, the notice deadline, or this document's own date.
+   - For amendments/deeds of variation: the expiry date is the BASE lease expiry date (which is unchanged by the amendment). Look for phrases like "Lease Expiry Date", "lease expires", "expiry of the term", "end of the term", "demise … expiring on".
+   - If the document explicitly states "Lease Expiry Date: YYYY-MM-DD" or "expiring on [date]", use that date.
+   - Return in ISO 8601 format (YYYY-MM-DD). Return null only if absolutely no lease expiry date is present.
 6. **Signatures & Seals**: Indicate whether the document contains handwritten or digital signatures, and whether it contains official seals, stamps, or notary marks.
 7. **Parties**: List the names of all parties, companies, or entities mentioned as signatories or principals.
 8. **Key Terms**: Extract key financial and legal terms as key-value pairs. Only include terms actually present in the document. For lease/rental documents, be especially thorough and extract ALL of these if present:
-   - "annual_rent" or "rent_amount": the base rent (specify amount and period, e.g. "$60,000/year")
-   - "lease_term": duration (e.g. "5 years")
-   - "lease_start_date": in ISO 8601 format (YYYY-MM-DD)
-   - "lease_end_date": in ISO 8601 format (YYYY-MM-DD)
-   - "break_option_date": tenant break option date in ISO 8601 format, if any
-   - "break_option_notice": notice period for break option (e.g. "6 months")
+   - "annual_rent" or "rent_amount": the current passing rent (amount and period, e.g. "£369,200/year")
+   - "lease_term": duration (e.g. "12 years")
+   - "lease_start_date": commencement date in ISO 8601 (YYYY-MM-DD)
+   - "lease_end_date": the formal lease EXPIRY date in ISO 8601 — same rule as field 5 above; NOT a break date
+   - "break_option_date": break option date in ISO 8601, ONLY if a break clause exists; clearly separate from lease_end_date
+   - "break_option_notice": notice period required for break option (e.g. "9 months")
    - "rent_escalation": type and details (e.g. "CPI-linked annually", "Fixed 3% per annum", "Open market review every 5 years")
    - "security_deposit": amount or description
    - "tenant_name": primary tenant name
    - "landlord_name": primary landlord name
    - "property_address": property location
-   - "leasable_area": area with unit (e.g. "5,000 sqm")
-   - "rent_review_date": next rent review date if specified
-   - "service_charge": amount if specified
+   - "leasable_area": area with unit (e.g. "14,200 sq ft")
+   - "rent_review_date": next upcoming rent review date if specified
+   - "service_charge": annual amount if specified
    - "vacancy_rate": if mentioned
    - "occupancy_rate": if mentioned
    - "noi" or "net_operating_income": if mentioned
@@ -278,13 +300,20 @@ The text below was extracted from a non-PDF file. Perform the following tasks:
    - Placeholder text or template markers
    - References to attachments or exhibits not present
 3. **Summary**: Write a concise 2-4 sentence summary of the document's content and purpose.
-4. **Expiry / Termination Date**: If the document contains an expiry date, termination date, or end date, extract it in ISO 8601 format (YYYY-MM-DD). Return null if none found.
+4. **Lease Expiry Date** (CRITICAL — read carefully):
+   - Extract the formal LEASE EXPIRY / END DATE — the date on which the lease term contractually expires.
+   - This is NOT the break option date. A break option is a right to terminate early; the lease itself still runs to the expiry date unless the break is exercised.
+   - This is NOT the rent review date, the amendment date, the notice deadline, or this document's own date.
+   - For amendments/deeds of variation: the expiry date is the BASE lease expiry date (unchanged by the amendment). Look for phrases like "Lease Expiry Date", "Base Lease Expiry Date", "expiry of the term", "demise … expiring on".
+   - Return in ISO 8601 format (YYYY-MM-DD). Return null only if absolutely no lease expiry date is present.
 5. **Signatures & Seals**: Indicate whether the document mentions or contains signatures, and whether it mentions or contains official seals, stamps, or notary marks.
 6. **Parties**: List the names of all parties, companies, or entities mentioned as signatories or principals.
 7. **Key Terms**: Extract key financial and legal terms as key-value pairs. Only include terms actually present. For lease/rental documents, be especially thorough and extract ALL of these if present:
-   - "annual_rent" or "rent_amount": the base rent (specify amount and period)
-   - "lease_term", "lease_start_date" (YYYY-MM-DD), "lease_end_date" (YYYY-MM-DD)
-   - "break_option_date" (YYYY-MM-DD), "break_option_notice"
+   - "annual_rent" or "rent_amount": the current passing rent (amount and period)
+   - "lease_term": duration (e.g. "12 years")
+   - "lease_start_date" (YYYY-MM-DD), "lease_end_date" (YYYY-MM-DD) — the formal expiry, NOT the break date
+   - "break_option_date" (YYYY-MM-DD) — ONLY if a break clause exists; must be different from lease_end_date
+   - "break_option_notice": notice period for break option
    - "rent_escalation": type and details (e.g. "CPI-linked", "Fixed 3%", "Open market review")
    - "security_deposit", "tenant_name", "landlord_name", "property_address"
    - "leasable_area", "service_charge", "occupancy_rate", "vacancy_rate"

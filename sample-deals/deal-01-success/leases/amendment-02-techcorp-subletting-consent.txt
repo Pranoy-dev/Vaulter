@@ -2,6 +2,23 @@ LICENCE TO SUB-LET (PART)
 ==========================
 DATED: 12 January 2024
 
+------------------------------------------------------------------------
+KEY TERMS SUMMARY
+------------------------------------------------------------------------
+Document Type        : Licence / Lease Amendment
+Amendment Number     : 2
+Tenant               : TechCorp UK Ltd
+Sub-Tenant           : DataStream Analytics Limited
+Landlord             : Riverside Holdings plc
+Property             : Unit 1 (part), Riverside Business Park, Thames Valley, RG1 8PQ
+Base Lease Date      : 1 April 2020
+Base Lease Expiry Date: 31 March 2032  ← unchanged by this document
+Break Option Date    : 31 March 2028  ← unchanged by this document
+This Document Date   : 12 January 2024
+Subject              : Landlord consent to sub-let part of Unit 1 to DataStream Analytics
+Execution Status     : Fully signed and executed as a deed
+------------------------------------------------------------------------
+
 PARTIES
 -------
 (1) LANDLORD  : Riverside Holdings plc ("the Landlord")
