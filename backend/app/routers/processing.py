@@ -156,6 +156,15 @@ async def _run_pipeline(deal_id: str):
                 "insights_cached_at": datetime.now(tz.utc).isoformat(),
             }).eq("id", deal_id).execute()
 
+        # Generate and store the AI rationale (ChatGPT explanation — non-fatal)
+        if insights:
+            await _update_job(deal_id, progress=0.96, sub_stage="generating_ai_rationale",
+                              stage_detail="Generating AI rationale…")
+            from app.services.risk_rationale import generate_and_store_rationale
+            rationale = await asyncio.to_thread(generate_and_store_rationale, deal_id, insights)
+            if rationale:
+                insights["ai_rationale"] = rationale
+
         await _update_job(deal_id, stage="done", progress=1.0, status="completed",
                           completed=True, sub_stage=None,
                           stage_detail=f"Risk score: {risk_score:.0f}")

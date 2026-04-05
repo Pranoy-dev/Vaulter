@@ -61,7 +61,7 @@ import {
   Users,
   X,
 } from "lucide-react"
-import type { DealInsights, DocumentInsight } from "@/hooks/use-deal-insights"
+import type { DealInsights, DocumentInsight, AiRationale } from "@/hooks/use-deal-insights"
 import { uploadFiles, isSupported } from "@/lib/chunked-upload"
 import { toast } from "sonner"
 import { useDealData } from "@/hooks/use-deal-data"
@@ -778,6 +778,12 @@ function AiInsightsPanel({ dealId, documents, loading, insights, getToken }: { d
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (insights.risk_score / 100) * circumference
 
+  // AI rationale is generated once during the processing pipeline and stored in the DB.
+  // Read it directly from the insights payload — no on-demand generation ever.
+  const aiNarrative: AiRationale | null = insights.ai_rationale ?? null
+  const aiNarrativeLoading = false
+  const aiNarrativeError = null
+
   const [previewDoc, setPreviewDoc] = React.useState<{ url: string; title: string } | null>(null)
   const [loadingPreviewId, setLoadingPreviewId] = React.useState<string | null>(null)
 
@@ -818,12 +824,30 @@ function AiInsightsPanel({ dealId, documents, loading, insights, getToken }: { d
       </Dialog>
     <div className="space-y-3 pr-1">
       {/* ── Deal Risk Score ── */}
-      <div className={`rounded-xl border border-border/70 ${RISK_BG_COLORS[insights.risk_band.color] ?? RISK_BG_COLORS.amber} p-4`}>
-        <div className="flex items-center gap-4">
-          {/* Score ring */}
+      <div className={`overflow-hidden rounded-2xl border border-border/70 ${RISK_BG_COLORS[insights.risk_band.color] ?? RISK_BG_COLORS.amber}`}>
+        {/* Header row */}
+        <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2">
+            <HoverTooltip content={`Risk band: ${insights.risk_band.label}. Bands are Low (75–100), Medium (50–74), High (25–49), Critical (0–24).`}>
+              <span className={`cursor-help text-base font-bold ${RISK_COLORS[insights.risk_band.color] ?? ""}`}>
+                {insights.risk_band.label}
+              </span>
+            </HoverTooltip>
+            <span className="text-[11px] text-muted-foreground">Deal Risk Score</span>
+          </div>
+          <HoverTooltip content="Deal Risk Score (0–100). Higher = safer deal.">
+            <span className={`cursor-help text-xs font-medium tabular-nums text-muted-foreground`}>
+              {Math.round(insights.risk_score)}<span className="text-[10px]">/100</span>
+            </span>
+          </HoverTooltip>
+        </div>
+
+        {/* Score ring + right column */}
+        <div className="flex items-start gap-4 px-4 pb-3">
+          {/* Ring */}
           <HoverTooltip content="Deal Risk Score (0–100). Higher = safer deal. Scored across completeness, lease risk, and financial risk dimensions.">
-            <div className="relative flex shrink-0 cursor-help items-center justify-center">
-              <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+            <div className="relative shrink-0 cursor-help">
+              <svg width="120" height="120" viewBox="0 0 96 96" className="-rotate-90">
                 <circle cx="48" cy="48" r={radius} fill="none" stroke="currentColor" strokeWidth="6" className="text-black/5 dark:text-white/10" />
                 <circle
                   cx="48" cy="48" r={radius} fill="none"
@@ -834,46 +858,55 @@ function AiInsightsPanel({ dealId, documents, loading, insights, getToken }: { d
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-2xl font-bold tabular-nums ${RISK_COLORS[insights.risk_band.color] ?? RISK_COLORS.amber}`}>
+                <span className={`text-3xl font-bold tabular-nums leading-none ${RISK_COLORS[insights.risk_band.color] ?? RISK_COLORS.amber}`}>
                   {Math.round(insights.risk_score)}
                 </span>
                 <span className="text-[10px] text-muted-foreground">/100</span>
               </div>
             </div>
           </HoverTooltip>
-          {/* Label + dimensions */}
-          <div className="min-w-0 flex-1">
-            <HoverTooltip content={`Risk band: ${insights.risk_band.label}. Bands are Low (75–100), Medium (50–74), High (25–49), Critical (0–24).`}>
-              <p className={`inline-flex cursor-help items-center gap-1 text-sm font-semibold ${RISK_COLORS[insights.risk_band.color] ?? ""}`}>
-                {insights.risk_band.label}
-              </p>
-            </HoverTooltip>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Deal Risk Score</p>
-            <div className="mt-2 space-y-1">
-              {Object.values(insights.dimensions).map((dim) => {
+
+          {/* Right: dimension chips + AI text */}
+          <div className="min-w-0 flex-1 space-y-2.5">
+            {/* Compact dimension chips */}
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                insights.dimensions.lease_risk,
+                insights.dimensions.completeness,
+                insights.dimensions.financial_risk,
+              ].map((dim) => {
                 const DIM_TOOLTIPS: Record<string, string> = {
                   "Completeness": "How complete the documentation pack is. Missing critical documents lower this score.",
                   "Lease Risk": "Lease-level risk based on WAULT, expiry concentration, and tenant diversification.",
                   "Financial Risk": "Financial documentation coverage — rent schedules, accounts, and financial statements.",
                 }
+                const chipColor =
+                  dim.score >= 75 ? "bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-400" :
+                  dim.score >= 50 ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400" :
+                  dim.score >= 25 ? "bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-400" :
+                  "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400"
                 return (
-                  <div key={dim.label} className="flex items-center gap-2">
-                    <HoverTooltip content={DIM_TOOLTIPS[dim.label] ?? `${dim.label} sub-score (0–100). Higher is better.`}>
-                      <span className="w-24 cursor-help truncate text-[11px] text-muted-foreground">{dim.label}</span>
-                    </HoverTooltip>
-                    <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/10 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          dim.score >= 75 ? "bg-green-500" : dim.score >= 50 ? "bg-amber-500" : dim.score >= 25 ? "bg-orange-500" : "bg-red-500"
-                        }`}
-                        style={{ width: `${dim.score}%` }}
-                      />
-                    </div>
-                    <span className="w-8 text-right text-[11px] font-medium tabular-nums">{Math.round(dim.score)}</span>
-                  </div>
+                  <HoverTooltip key={dim.label} content={DIM_TOOLTIPS[dim.label] ?? `${dim.label} sub-score (0–100). Higher is better.`}>
+                    <span className={`inline-flex cursor-help items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${chipColor}`}>
+                      {dim.label}
+                      <span className="font-bold tabular-nums">{Math.round(dim.score)}%</span>
+                    </span>
+                  </HoverTooltip>
                 )
               })}
             </div>
+
+            {/* AI rationale text — shown only when available from processing */}
+            {aiNarrative ? (
+              <div className="space-y-1">
+                <p className="text-[11.5px] leading-relaxed text-muted-foreground">{aiNarrative.summary}</p>
+                {aiNarrative.actions.length > 0 && (
+                  <p className="text-[11px] font-medium text-muted-foreground/70">
+                    → {aiNarrative.actions[0]}
+                  </p>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

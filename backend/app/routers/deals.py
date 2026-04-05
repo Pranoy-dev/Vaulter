@@ -287,15 +287,22 @@ async def get_deal_insights(
         user_id = _resolve_user_id(clerk_user_id)
         _verify_deal_ownership(deal_id, user_id)
 
-        # Try cache first
+        # Try cache first; also fetch ai_rationale stored separately
         sb = get_supabase()
-        row = sb.table("deals").select("insights_cache").eq("id", str(deal_id)).single().execute()
+        row = sb.table("deals").select("insights_cache, ai_rationale").eq("id", str(deal_id)).single().execute()
         cached = row.data.get("insights_cache") if row.data else None
+        ai_rationale = row.data.get("ai_rationale") if row.data else None
         if cached:
+            # Merge persisted rationale into the cached insights payload
+            if ai_rationale and "ai_rationale" not in cached:
+                cached["ai_rationale"] = ai_rationale
             return ApiResponse.ok(cached)
 
         # No cache — compute live (first time, or pre-processing)
         insights = compute_deal_insights(str(deal_id))
+        # Merge persisted rationale if it exists from a prior run
+        if ai_rationale:
+            insights["ai_rationale"] = ai_rationale
         return ApiResponse.ok(insights)
     except HTTPException:
         raise

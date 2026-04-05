@@ -75,6 +75,14 @@ export interface DocumentInsight {
   incompleteness_reasons?: string[]
 }
 
+export interface AiRationale {
+  summary: string
+  verdict: "risky" | "good" | "mixed"
+  positives: string[]
+  concerns: string[]
+  actions: string[]
+}
+
 export interface DealInsights {
   risk_score: number
   risk_band: RiskBand
@@ -93,6 +101,8 @@ export interface DealInsights {
   document_insights: DocumentInsight[]
   total_documents: number
   processed_documents: number
+  /** Generated during processing by OpenAI and stored permanently. */
+  ai_rationale?: AiRationale | null
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
